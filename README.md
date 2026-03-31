@@ -2,19 +2,33 @@
 
 `llm_yolo`는 Unitree Go2용 sim-first ROS 2 MVP 프로젝트입니다. 현재 기준선은 Isaac Sim 5.1.0에서 먼저 동작시키는 것이고, 이후 같은 상위 구조를 유지한 채 real backend로 전환하는 것을 목표로 합니다.
 
-## 현재 완료된 MVP
-- 자연어 `center 로 가` -> named place navigation 동작 확인
-- 자연어 `red_box`, `pink_box`, `yellow_box 찾아` -> ground-truth 기반 `find_object` 동작 확인
-- 자연어 `chair 찾아` -> YOLO 기반 `find_object` 동작 확인
-- 실제 LLM 모드에서 자연어 명령 해석 경로 동작 확인
-- 실제 LLM 모드에서 `mission_plan` 2단계 복합 명령 생성 및 순차 실행 검증 완료
-- 실제 LLM 모드에서 `찾고 없으면 center로 복귀` 조건부 복귀 명령 검증 완료
-- 실제 LLM 모드에서 `run_if` 기반 3단계 일반화(`조건부 재시도`, `대체 대상 탐색`) 검증 완료
-- Nav2 모드에서 액션 이름 분리(`/llm_navigate_to_pose` vs `/navigate_to_pose`) 및 `center 로 가` 이동 검증 완료
-- Nav2 모드에서 `긴급 정지` / `정지 해제` 동작 검증 완료
-- 객체를 못 찾았을 때 fallback 이동 후 종료 흐름 확인
-- `/sim/visible_objects` 자동 publish 확인
-- sim perception을 수동 좌표 입력 방식이 아니라 Isaac Sim prim path 기반 ground-truth 방식으로 전환 완료
+## 프로젝트 진행 체크리스트 (Roadmap)
+
+### ✅ 완료된 태스크 (Completed)
+- [x] **Phase 0~2. 공통 인터페이스 및 Sim 기반 기초 미션 검증**
+  - 공통 `mission_manager`, `llm_command_router` 베이스 구축
+  - 자연어 `center 로 가` -> named place 이동 검증
+  - 자연어 `red_box` 등 -> ground-truth 기반 객체 탐색 및 fallback 검증
+  - `scan_scene` 제자리 회전 탐색 로직 및 취소/에러 흐름 검증
+  - sim perception을 Isaac Sim prim path 기반 ground-truth로 전환 완료
+- [x] **Phase 3. Sim 기반 실제 YOLO + 실제 LLM 연결**
+  - `chair 찾아` -> YOLO 기반 탐지 검증 완료
+  - 실제 LLM 모드 전환 후 자연어 명령 해석 검증 완료
+- [x] **Phase 3.25. Direct 주행 제어 확장 및 안전 강화**
+  - `speed_hint` 반영 (천천히, 빠르게 등 속도 조절)
+  - `긴급 정지` 및 `정지 해제` (`emergency_stop`, `clear`) 기능 검증 완료 (Nav2 모드 포함)
+- [x] **Phase 3.3. `mission_plan` 일반화 및 복합 명령 지원**
+  - `run_if` 조건 실행 (`always`, `previous_failed` 등)
+  - 3단계 이상 순차 명령 (`center로 가서 chair 찾고...`)
+  - 조건부 재시도 및 대체 대상 탐색 (`chair 찾고 없으면 center로 복귀/다시 찾아`)
+
+### ⬜ 진행 예정 태스크 (To-Do)
+- [ ] **Phase 3.1. VLM API 연동 및 YOLO 보완** (의미론적 장면 설명 추가)
+- [ ] **Phase 3.2. OpenRouter 기반 클라우드 LLM 연동** (오픈소스 로컬/클라우드 분기)
+- [ ] **Phase 3.6. 운영 가시화 및 통합 테스트 체계화** (RViz2 대시보드 고도화)
+- [ ] **Phase 3.5. Sim Nav2 기반 주행 전환** (현재는 localization 안정화 전까지 보류)
+- [ ] **Phase 4~5. Real Backend 연결 및 실기체(Go2 하드웨어) 검증**
+- [ ] **Phase 6. 배포 준비 및 엣지 최적화** (ONNX export 및 Jetson 배포 준비)
 
 ## 현재 구성요소와 역할
 - `mission_manager`
