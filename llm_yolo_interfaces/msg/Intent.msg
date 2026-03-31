@@ -3,6 +3,7 @@ string intent
 string target_type
 string target_value
 int32 max_duration_sec
+float32 approach_distance_m
 string speed_hint
 float32 confidence
 bool require_confirmation

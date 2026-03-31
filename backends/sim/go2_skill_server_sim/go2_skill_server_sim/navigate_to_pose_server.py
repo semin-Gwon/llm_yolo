@@ -148,6 +148,16 @@ class NavigateToPoseServer(Node):
             target.update(override)
         return target or None
 
+    def resolve_request_target(self, request):
+        if bool(request.use_pose):
+            return {
+                'x_m': float(request.x_m),
+                'y_m': float(request.y_m),
+                'yaw_rad': float(request.desired_yaw_rad),
+                'radius_m': float(self.get_parameter('default_goal_radius_m').value),
+            }
+        return self.resolve_target(request.target_name)
+
     def yaw_to_quaternion(self, yaw: float):
         half = 0.5 * yaw
         return (0.0, 0.0, math.sin(half), math.cos(half))
@@ -376,7 +386,7 @@ class NavigateToPoseServer(Node):
 
     def execute(self, goal_handle):
         target_name = goal_handle.request.target_name
-        target = self.resolve_target(target_name)
+        target = self.resolve_request_target(goal_handle.request)
         result = NavigateToPose.Result()
         if target is None:
             goal_handle.abort()

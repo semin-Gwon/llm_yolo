@@ -49,6 +49,7 @@ class LLMCommandRouterNode(Node):
             'target_value': target_value,
             'confidence': float(confidence),
             'max_duration_sec': 30,
+            'approach_distance_m': 0.8,
             'speed_hint': speed_hint,
         }
 
@@ -98,6 +99,7 @@ class LLMCommandRouterNode(Node):
         intent.target_type = routed['target_type']
         intent.target_value = routed['target_value']
         intent.max_duration_sec = int(routed.get('max_duration_sec', 30))
+        intent.approach_distance_m = float(routed.get('approach_distance_m', 0.8))
         intent.speed_hint = str(routed.get('speed_hint', 'normal'))
         intent.confidence = float(routed['confidence'])
         intent.require_confirmation = False

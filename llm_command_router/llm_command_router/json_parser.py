@@ -35,6 +35,9 @@ def parse_user_text(text: str, named_places: Iterable[str]) -> tuple[str, str, s
     speed_hint = extract_speed_hint(text)
     if any(token in text for token in ['정지', '취소', 'cancel', 'stop']):
         return 'cancel', 'none', '', 1.0, 'normal'
+    if any(token in text for token in ['앞으로', '앞에', '다가가', '접근']) or 'approach' in lowered:
+        target = extract_target(text, fallback='chair')
+        return 'approach_object', 'object_class', target, 0.85, speed_hint
     for place in named_places:
         if place.lower() in lowered or place in text:
             return 'navigate_to_named_place', 'named_place', place, 0.95, speed_hint

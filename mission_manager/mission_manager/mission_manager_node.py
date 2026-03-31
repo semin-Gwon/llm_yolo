@@ -5,7 +5,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_msgs.msg import Bool, Empty, String
 
-from llm_yolo_interfaces.action import NavigateToPose, ScanScene
+from llm_yolo_interfaces.action import ApproachObject, NavigateToPose, ScanScene
 from llm_yolo_interfaces.msg import Intent
 
 
@@ -15,6 +15,7 @@ class MissionManagerNode(Node):
         self.declare_parameter('fallback_places', ['hallway_corner', 'meeting_room_a'])
         self.declare_parameter('mission_timeout_sec', 30)
         self.declare_parameter('navigate_action_name', '/llm_navigate_to_pose')
+        self.declare_parameter('approach_action_name', '/approach_object')
         self.fallback_places = list(self.get_parameter('fallback_places').value)
         self.intent_sub = self.create_subscription(Intent, '/intent', self.on_intent, 10)
         self.mission_plan_sub = self.create_subscription(String, '/mission_plan', self.on_mission_plan, 10)
@@ -24,6 +25,7 @@ class MissionManagerNode(Node):
         self.heartbeat_pub = self.create_publisher(Empty, '/offboard_heartbeat', 10)
         self.heartbeat_timer = self.create_timer(0.2, self.publish_heartbeat)
         self.nav_client = ActionClient(self, NavigateToPose, self.get_parameter('navigate_action_name').value)
+        self.approach_client = ActionClient(self, ApproachObject, self.get_parameter('approach_action_name').value)
         self.scan_client = ActionClient(self, ScanScene, '/scan_scene')
         self.busy = False
         self.current_goal_handle = None
@@ -95,6 +97,15 @@ class MissionManagerNode(Node):
             self.busy = True
             self.current_mode = 'navigate'
             self.send_nav(msg.target_value, msg.max_duration_sec or 30, getattr(msg, 'speed_hint', 'normal'))
+        elif msg.intent == 'approach_object':
+            self.busy = True
+            self.current_mode = 'approach_object'
+            self.send_approach(
+                msg.target_value,
+                msg.max_duration_sec or 30,
+                getattr(msg, 'approach_distance_m', 0.8),
+                getattr(msg, 'speed_hint', 'normal'),
+            )
         elif msg.intent == 'scan_scene':
             self.busy = True
             self.current_mode = 'scan'
@@ -172,6 +183,15 @@ class MissionManagerNode(Node):
             self.current_mode = 'plan_navigate'
             self.send_nav(target_value, timeout_sec, str(step.get('speed_hint', 'normal')))
             return
+        if intent == 'approach_object':
+            self.current_mode = 'plan_approach_object'
+            self.send_approach(
+                target_value,
+                timeout_sec,
+                float(step.get('approach_distance_m', 0.8)),
+                str(step.get('speed_hint', 'normal')),
+            )
+            return
         if intent == 'scan_scene':
             self.current_mode = 'plan_scan'
             self.send_scan(target_value, timeout_sec)
@@ -241,6 +261,17 @@ class MissionManagerNode(Node):
         future.add_done_callback(self._on_scan_goal_response)
         self.publish_state(f'scan requested: {target_class}')
 
+    def send_approach(self, target_class: str, timeout_sec: int = 30, approach_distance_m: float = 0.8, speed_hint: str = 'normal'):
+        self.approach_client.wait_for_server()
+        goal = ApproachObject.Goal()
+        goal.target_class = target_class
+        goal.timeout_sec = int(timeout_sec)
+        goal.approach_distance_m = float(approach_distance_m)
+        goal.speed_hint = str(speed_hint or 'normal')
+        future = self.approach_client.send_goal_async(goal)
+        future.add_done_callback(self._on_approach_goal_response)
+        self.publish_state(f'approach requested: {target_class}')
+
     def _on_nav_goal_response(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
@@ -266,6 +297,19 @@ class MissionManagerNode(Node):
         self.current_goal_handle = goal_handle
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(self._on_scan_result)
+
+    def _on_approach_goal_response(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            if self.current_mode.startswith('plan_'):
+                self.finish_plan_step(False, 'approach goal rejected')
+                return
+            self.publish_state('approach goal rejected')
+            self.reset_execution()
+            return
+        self.current_goal_handle = goal_handle
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(self._on_approach_result)
 
     def _on_nav_result(self, future):
         result = future.result().result
@@ -322,6 +366,16 @@ class MissionManagerNode(Node):
                 self.send_nav(next_place)
                 return
             self.finish_plan_step(False, f'find_object failed: {self.find_target}')
+            return
+
+    def _on_approach_result(self, future):
+        result = future.result().result
+        if self.current_mode == 'approach_object':
+            self.publish_state(f'approach completed: {result.outcome}')
+            self.reset_execution()
+            return
+        if self.current_mode == 'plan_approach_object':
+            self.finish_plan_step(bool(result.success), result.outcome)
             return
 
 

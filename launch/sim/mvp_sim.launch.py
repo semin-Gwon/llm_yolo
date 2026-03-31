@@ -17,6 +17,12 @@ def generate_launch_description():
         ),
         Node(
             package='go2_skill_server_sim',
+            executable='approach_object_server',
+            name='approach_object_server',
+            parameters=['/home/jnu/llm_yolo/configs/sim/sim_topics.yaml'],
+        ),
+        Node(
+            package='go2_skill_server_sim',
             executable='rotate_in_place_server',
             name='rotate_in_place_server',
             parameters=['/home/jnu/llm_yolo/configs/sim/sim_topics.yaml'],

@@ -20,6 +20,13 @@ navigate_to_pose_server:
     speed_scale_normal: 1.0
     speed_scale_fast: 1.25
 
+approach_object_server:
+  ros__parameters:
+    object_pose_topic: /perception/object_poses
+    navigate_action_name: /llm_navigate_to_pose
+    odom_topic: /odom
+    default_approach_distance_m: 0.8
+
 rotate_in_place_server:
   ros__parameters:
     cmd_vel_topic: /cmd_vel
@@ -42,6 +49,11 @@ perception_node_sim:
   ros__parameters:
     sim_visible_objects_topic: /sim/visible_objects
     normalized_objects_topic: /perception/visible_objects
+    object_pose_topic: /perception/object_poses
+    camera_image_topic: /camera/color/image_raw
+    camera_depth_topic: /camera/depth/image_rect_raw
+    camera_info_topic: /camera/camera_info
+    object_pose_frame: map
     default_visible_objects:
       - chair
       - person

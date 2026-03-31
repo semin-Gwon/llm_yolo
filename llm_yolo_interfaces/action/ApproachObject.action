@@ -1,0 +1,13 @@
+string target_class
+int32 timeout_sec
+float32 approach_distance_m
+string speed_hint
+---
+bool success
+string outcome
+float32 object_x_m
+float32 object_y_m
+float32 goal_x_m
+float32 goal_y_m
+---
+string status
