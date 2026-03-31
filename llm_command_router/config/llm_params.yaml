@@ -1,0 +1,6 @@
+llm_command_router_node:
+  ros__parameters:
+    named_places:
+      - meeting_room_a
+      - charging_dock
+      - hallway_corner

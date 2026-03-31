@@ -1,0 +1,24 @@
+{
+  "visible_objects": [
+    {
+      "class_name": "red_box",
+      "prim_path": "/World/ground/terrain/Box_B",
+      "radius_m": 1.0
+    },
+    {
+      "class_name": "pink_box",
+      "prim_path": "/World/ground/terrain/Pillar_1",
+      "radius_m": 1.0
+    },
+    {
+      "class_name": "yellow_box",
+      "prim_path": "/World/ground/terrain/Pillar_4",
+      "radius_m": 1.0
+    },
+    {
+      "class_name": "blue_box",
+      "prim_path": "/World/ground/terrain/Box_A",
+      "radius_m": 1.0
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+named_places:
+  meeting_room_a:
+    yaw_rad: 0.0
+    radius_m: 0.7
+  charging_dock:
+    yaw_rad: 3.14
+    radius_m: 0.5
+  hallway_corner:
+    yaw_rad: 1.57
+    radius_m: 0.8

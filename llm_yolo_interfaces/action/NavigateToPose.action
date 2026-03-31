@@ -1,0 +1,9 @@
+string target_name
+float32 desired_yaw_rad
+int32 timeout_sec
+string speed_hint
+---
+bool success
+string outcome
+---
+string status

@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>go2_skill_server_real</name>
+  <version>0.0.1</version>
+  <description>Real backend skill action servers for llm_yolo MVP.</description>
+  <maintainer email="jnu@example.com">jnu</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rclpy</depend>
+  <depend>llm_yolo_interfaces</depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,7 @@
+float32 yaw_rad
+int32 timeout_sec
+---
+bool success
+string outcome
+---
+string status

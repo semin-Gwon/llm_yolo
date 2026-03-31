@@ -1,0 +1,8 @@
+string target_class
+int32 timeout_sec
+---
+bool found
+string detection_state
+string message
+---
+string status

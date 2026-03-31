@@ -1,0 +1,13 @@
+perception_node_sim:
+  ros__parameters:
+    mode: yolo
+    default_visible_objects:
+      - chair
+      - person
+      - charging_dock
+    sim_visible_objects_topic: /sim/visible_objects
+    normalized_objects_topic: /perception/visible_objects
+    camera_image_topic: /camera/color/image_raw
+    yolo_model: yolo11n.pt
+    yolo_conf_threshold: 0.25
+    yolo_target_classes: []

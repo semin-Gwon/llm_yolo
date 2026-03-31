@@ -1,0 +1,47 @@
+navigate_to_pose_server:
+  ros__parameters:
+    navigation_mode: nav2
+    cmd_vel_topic: /cmd_vel
+    odom_topic: /odom
+    named_place_pose_topic: /sim/named_place_poses
+    control_rate_hz: 10.0
+    linear_speed_mps: 0.35
+    angular_speed_rps: 0.8
+    yaw_gain: 1.5
+    heading_tolerance_rad: 0.2
+    named_places_file: /home/jnu/llm_yolo/configs/sim/sim_named_places.yaml
+    default_goal_radius_m: 0.5
+    default_goal_yaw_rad: 0.0
+    action_name: /llm_navigate_to_pose
+    nav2_action_name: /navigate_to_pose
+    global_frame: map
+    nav2_server_wait_sec: 5.0
+    speed_scale_slow: 0.6
+    speed_scale_normal: 1.0
+    speed_scale_fast: 1.25
+
+rotate_in_place_server:
+  ros__parameters:
+    cmd_vel_topic: /cmd_vel
+    angular_speed_rps: 0.8
+    control_rate_hz: 10.0
+
+scan_scene_server:
+  ros__parameters:
+    detected_objects_topic: /perception/visible_objects
+    default_detected_objects:
+      - chair
+      - person
+    enable_rotate_scan: true
+    rotate_scan_num_views: 36
+    rotate_scan_step_yaw_rad: 0.1745329252
+    rotate_scan_settle_sec: 0.05
+    rotate_timeout_sec: 5
+
+perception_node_sim:
+  ros__parameters:
+    sim_visible_objects_topic: /sim/visible_objects
+    normalized_objects_topic: /perception/visible_objects
+    default_visible_objects:
+      - chair
+      - person

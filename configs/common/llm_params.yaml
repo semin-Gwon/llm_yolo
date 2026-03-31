@@ -1,0 +1,16 @@
+llm_command_router_node:
+  ros__parameters:
+    mode: llm
+    named_places:
+    - center
+    object_classes:
+    - chair
+    - person
+    - red_box
+    - pink_box
+    - yellow_box
+    - blue_box
+    ollama_base_url: http://127.0.0.1:11434
+    ollama_model: qwen2.5:latest
+    ollama_timeout_sec: 15.0
+    fallback_to_rule_based: true

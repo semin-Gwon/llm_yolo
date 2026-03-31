@@ -1,0 +1,5 @@
+named_places:
+  center:
+    prim_path: /World/ground/terrain
+    yaw_rad: 1.911400654708279
+    radius_m: 0.6

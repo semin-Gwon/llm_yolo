@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>go2_skill_server_sim</name>
+  <version>0.0.1</version>
+  <description>Sim skill action servers for llm_yolo MVP.</description>
+  <maintainer email="jnu@example.com">jnu</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>llm_yolo_interfaces</depend>
+  <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>action_msgs</depend>
+  <depend>std_msgs</depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,4 @@
+llm_command_router_node:
+  ros__parameters:
+    named_places:
+      - center

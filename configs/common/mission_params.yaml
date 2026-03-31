@@ -1,0 +1,5 @@
+mission_manager_node:
+  ros__parameters:
+    fallback_places:
+    - center
+    mission_timeout_sec: 30

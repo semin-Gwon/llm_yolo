@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>onboard_min_guard</name>
+  <version>0.0.1</version>
+  <description>Minimal deadman guard for llm_yolo MVP.</description>
+  <maintainer email="jnu@example.com">jnu</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

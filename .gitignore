@@ -1,0 +1,38 @@
+# 1. 파이썬 가상환경 (용량이 매우 크고 PC마다 설정이 다름)
+.venv_yolo/
+.venv/
+env/
+venv/
+
+# 2. 파이썬 캐시 파일 (실행마다 자동 생성되는 임시 쓰레기 파일)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 3. 인공지능 모델 가중치 (수십~수백 MB로 GitHub 용량 제한에 걸림)
+*.pt
+*.pth
+*.onnx
+*.weights
+yolo11n.pt
+
+# 4. ROS 2 빌드 및 로그 파일 (명령어 칠 때마다 계속 찌꺼기가 생성됨)
+build/
+install/
+log/
+
+# 5. 로봇 데이터 및 로깅 기록 (비디오, 시뮬레이션 기록 등)
+bags/
+*.bag
+*.db3
+*.db3-shm
+*.db3-wal
+
+# 6. IDE 설정 파일 (작업자 개인의 VSCode 단축키/화면 설정 등)
+.vscode/
+.idea/
+
+# 7. OS 시스템 파일 (맥OS나 윈도우에서 자동 생성되는 찌꺼기)
+.DS_Store
+Thumbs.db

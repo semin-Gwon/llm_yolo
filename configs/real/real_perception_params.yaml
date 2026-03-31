@@ -1,0 +1,3 @@
+perception_node_real:
+  ros__parameters:
+    detector_backend: yolo
