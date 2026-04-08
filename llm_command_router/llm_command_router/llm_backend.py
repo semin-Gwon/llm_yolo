@@ -10,24 +10,27 @@ ALLOWED_TARGET_TYPES = {'named_place', 'object_class', 'none'}
 ALLOWED_FAILURE_POLICIES = {'abort_all', 'continue', 'return_home'}
 ALLOWED_SPEED_HINTS = {'slow', 'normal', 'fast'}
 ALLOWED_RUN_IF = {'always', 'previous_failed', 'previous_succeeded'}
+ALLOWED_OBJECT_SELECTORS = {'', 'near', 'far'}
 
 
 def build_prompt(text: str, named_places: list[str], object_classes: list[str]) -> str:
     return (
         'You are a strict intent parser for a mobile robot. '
         'Return only valid JSON. No prose, no markdown.\n'
-        'For single actions return keys intent,target_type,target_value,max_duration_sec,approach_distance_m,speed_hint,confidence.\n'
-        'For multi-step commands return keys intent,steps,failure_policy,confidence where intent must be mission_plan. Each step may include speed_hint and run_if.\n'
+        'For single actions return keys intent,target_type,target_value,object_selector,max_duration_sec,approach_distance_m,speed_hint,confidence.\n'
+        'For multi-step commands return keys intent,steps,failure_policy,confidence where intent must be mission_plan. Each step may include object_selector,speed_hint and run_if.\n'
         f'Allowed top-level intents: {sorted(ALLOWED_TOP_LEVEL_INTENTS)}\n'
         f'Allowed step intents: {sorted(ALLOWED_INTENTS)}\n'
         f'Allowed named places: {named_places}\n'
         f'Allowed object classes: {object_classes}\n'
+        f'Allowed object_selector: {sorted(ALLOWED_OBJECT_SELECTORS)}\n'
         f'Allowed failure_policy: {sorted(ALLOWED_FAILURE_POLICIES)}\n'
         'Rules:\n'
         '- If the user asks to go to a place, use navigate_to_named_place with target_type named_place.\n'
         '- If the user asks to find an object, use find_object with target_type object_class.\n'
         '- If the user asks to scan, use scan_scene with target_type object_class.\n'
         '- If the user asks to go to or approach the front of an object, use approach_object with target_type object_class.\n'
+        '- object_selector may be near or far when the user specifies relative distance among same-class objects.\n'
         '- If the user asks to stop or cancel, use cancel with target_type none and empty target_value.\n'
         '- Use speed_hint slow for phrases like 천천히/느리게/slow, fast for 빠르게/빨리/fast, otherwise normal.\n'
         '- If the user asks for multiple actions in sequence, use intent mission_plan and provide ordered steps.\n'
@@ -36,8 +39,8 @@ def build_prompt(text: str, named_places: list[str], object_classes: list[str]) 
         '- If the user says to return to center/home only when find_object fails, do NOT add a second navigate step. Use a single find_object step with failure_policy return_home.\n'
         '- Use failure_policy abort_all by default unless the user explicitly asks to continue or return home/center on failure.\n'
         '- Confidence must be a number between 0.0 and 1.0.\n'
-        'Example single intent JSON: {"intent":"find_object","target_type":"object_class","target_value":"chair","max_duration_sec":30,"approach_distance_m":0.8,"speed_hint":"normal","confidence":0.9}\n'
-        'Example mission plan JSON: {"intent":"mission_plan","steps":[{"intent":"navigate_to_named_place","target_type":"named_place","target_value":"center","max_duration_sec":30,"approach_distance_m":0.8,"speed_hint":"normal","run_if":"always","confidence":0.95},{"intent":"find_object","target_type":"object_class","target_value":"chair","max_duration_sec":30,"approach_distance_m":0.8,"speed_hint":"normal","run_if":"always","confidence":0.9}],"failure_policy":"abort_all","confidence":0.92}\n'
+        'Example single intent JSON: {"intent":"find_object","target_type":"object_class","target_value":"chair","object_selector":"near","max_duration_sec":30,"approach_distance_m":0.8,"speed_hint":"normal","confidence":0.9}\n'
+        'Example mission plan JSON: {"intent":"mission_plan","steps":[{"intent":"navigate_to_named_place","target_type":"named_place","target_value":"center","object_selector":"","max_duration_sec":30,"approach_distance_m":0.8,"speed_hint":"normal","run_if":"always","confidence":0.95},{"intent":"find_object","target_type":"object_class","target_value":"chair","object_selector":"near","max_duration_sec":30,"approach_distance_m":0.8,"speed_hint":"normal","run_if":"always","confidence":0.9}],"failure_policy":"abort_all","confidence":0.92}\n'
         f'User text: {text}\n'
     )
 
@@ -68,6 +71,7 @@ def validate_step(step: dict, named_places: list[str], object_classes: list[str]
     confidence = float(step.get('confidence', 0.0))
     max_duration_sec = int(step.get('max_duration_sec', 30))
     approach_distance_m = float(step.get('approach_distance_m', 0.8))
+    object_selector = str(step.get('object_selector', '')).strip().lower()
     speed_hint = str(step.get('speed_hint', 'normal')).strip().lower() or 'normal'
     run_if = str(step.get('run_if', 'always')).strip().lower() or 'always'
 
@@ -85,6 +89,8 @@ def validate_step(step: dict, named_places: list[str], object_classes: list[str]
         raise ValueError(f'invalid speed_hint: {speed_hint}')
     if run_if not in ALLOWED_RUN_IF:
         raise ValueError(f'invalid run_if: {run_if}')
+    if object_selector not in ALLOWED_OBJECT_SELECTORS:
+        raise ValueError(f'invalid object_selector: {object_selector}')
 
     if intent == 'navigate_to_named_place':
         if target_type != 'named_place' or target_value not in named_places:
@@ -103,6 +109,7 @@ def validate_step(step: dict, named_places: list[str], object_classes: list[str]
         'confidence': confidence,
         'max_duration_sec': max_duration_sec,
         'approach_distance_m': approach_distance_m,
+        'object_selector': object_selector,
         'speed_hint': speed_hint,
         'run_if': run_if,
     }

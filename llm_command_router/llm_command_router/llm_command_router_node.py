@@ -41,12 +41,13 @@ class LLMCommandRouterNode(Node):
         self.user_sub = self.create_subscription(String, '/user_text', self.on_user_text, 10)
 
     def parse_with_rule_based(self, text: str):
-        intent_name, target_type, target_value, confidence, speed_hint = parse_user_text(text, self.named_places)
+        intent_name, target_type, target_value, confidence, speed_hint, object_selector = parse_user_text(text, self.named_places)
         return {
             'kind': 'intent',
             'intent': intent_name,
             'target_type': target_type,
             'target_value': target_value,
+            'object_selector': object_selector,
             'confidence': float(confidence),
             'max_duration_sec': 30,
             'approach_distance_m': 0.8,
@@ -98,6 +99,7 @@ class LLMCommandRouterNode(Node):
         intent.intent = routed['intent']
         intent.target_type = routed['target_type']
         intent.target_value = routed['target_value']
+        intent.object_selector = str(routed.get('object_selector', ''))
         intent.max_duration_sec = int(routed.get('max_duration_sec', 30))
         intent.approach_distance_m = float(routed.get('approach_distance_m', 0.8))
         intent.speed_hint = str(routed.get('speed_hint', 'normal'))

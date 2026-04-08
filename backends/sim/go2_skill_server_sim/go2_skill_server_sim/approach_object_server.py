@@ -105,10 +105,22 @@ class ApproachObjectServer(Node):
         except TransformException:
             return self.current_pose
 
-    def select_object(self, target_class: str):
+    def select_object(self, target_class: str, object_selector: str = ''):
         candidates = self.object_poses.get(target_class, [])
         if not candidates:
             return None
+        pose = self.current_pose_in_global()
+        selector = str(object_selector or '').strip().lower()
+
+        if selector in {'near', 'far'} and pose is not None:
+            robot_x, robot_y, _ = pose
+            key_fn = lambda item: math.hypot(float(item.get('x_m', 0.0)) - robot_x, float(item.get('y_m', 0.0)) - robot_y)
+            return min(candidates, key=key_fn) if selector == 'near' else max(candidates, key=key_fn)
+
+        if pose is not None:
+            robot_x, robot_y, _ = pose
+            key_fn = lambda item: math.hypot(float(item.get('x_m', 0.0)) - robot_x, float(item.get('y_m', 0.0)) - robot_y)
+            return min(candidates, key=key_fn)
         return max(candidates, key=lambda item: float(item.get('confidence', 0.0)))
 
     def compute_goal_pose(self, obj: dict, approach_distance_m: float):
@@ -142,6 +154,7 @@ class ApproachObjectServer(Node):
     def execute(self, goal_handle):
         result = ApproachObject.Result()
         target_class = str(goal_handle.request.target_class).strip()
+        object_selector = str(goal_handle.request.object_selector).strip().lower()
         timeout_sec = int(goal_handle.request.timeout_sec or 30)
         approach_distance_m = float(
             goal_handle.request.approach_distance_m
@@ -157,7 +170,7 @@ class ApproachObjectServer(Node):
                 result.success = False
                 result.outcome = f'canceled:{target_class}'
                 return result
-            selected = self.select_object(target_class)
+            selected = self.select_object(target_class, object_selector)
             if selected is not None and self.current_pose_in_global() is not None:
                 break
             time.sleep(0.05)

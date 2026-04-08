@@ -2,6 +2,7 @@ builtin_interfaces/Time stamp
 string intent
 string target_type
 string target_value
+string object_selector
 int32 max_duration_sec
 float32 approach_distance_m
 string speed_hint

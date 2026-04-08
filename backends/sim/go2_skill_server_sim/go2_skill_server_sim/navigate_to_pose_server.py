@@ -14,7 +14,9 @@ from rclpy.action import ActionClient, ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.time import Time
 from std_msgs.msg import Bool, String
+from tf2_ros import Buffer, TransformException, TransformListener
 
 from llm_yolo_interfaces.action import NavigateToPose
 
@@ -41,6 +43,13 @@ class NavigateToPoseServer(Node):
         self.declare_parameter('speed_scale_slow', 0.6)
         self.declare_parameter('speed_scale_normal', 1.0)
         self.declare_parameter('speed_scale_fast', 1.25)
+        self.declare_parameter('person_pause_enabled', True)
+        self.declare_parameter('person_visible_objects_topic', '/perception/visible_objects')
+        self.declare_parameter('person_object_pose_topic', '/perception/object_poses')
+        self.declare_parameter('person_target_class', 'person')
+        self.declare_parameter('person_pause_distance_m', 1.5)
+        self.declare_parameter('person_pause_trigger_count', 1)
+        self.declare_parameter('person_pause_clear_count', 2)
 
         self.callback_group = ReentrantCallbackGroup()
         self.cmd_vel_pub = self.create_publisher(
@@ -76,6 +85,20 @@ class NavigateToPoseServer(Node):
             10,
             callback_group=self.callback_group,
         )
+        self.visible_objects_sub = self.create_subscription(
+            String,
+            self.get_parameter('person_visible_objects_topic').value,
+            self.on_visible_objects,
+            10,
+            callback_group=self.callback_group,
+        )
+        self.person_object_pose_sub = self.create_subscription(
+            String,
+            self.get_parameter('person_object_pose_topic').value,
+            self.on_object_poses,
+            10,
+            callback_group=self.callback_group,
+        )
         self.server = ActionServer(
             self,
             NavigateToPose,
@@ -91,8 +114,15 @@ class NavigateToPoseServer(Node):
         )
         self.named_places = self.load_named_places(self.get_parameter('named_places_file').value)
         self.named_place_overrides = {}
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
         self.current_pose = None
         self.emergency_stop_active = False
+        self.person_visible = False
+        self.person_candidates = []
+        self.person_pause_active = False
+        self.person_detect_streak = 0
+        self.person_clear_streak = 0
 
     def load_named_places(self, path_text: str):
         data = yaml.safe_load(Path(path_text).read_text()) or {}
@@ -127,6 +157,78 @@ class NavigateToPoseServer(Node):
             return
         self.emergency_stop_active = False
 
+    def on_visible_objects(self, msg: String):
+        target_class = str(self.get_parameter('person_target_class').value).strip()
+        names = {item.strip() for item in msg.data.split(',') if item.strip()}
+        visible_now = bool(target_class) and target_class in names
+        visible_for_pause = self.person_visible_for_pause(visible_now)
+        self.person_visible = visible_for_pause
+        if visible_for_pause:
+            self.person_detect_streak += 1
+            self.person_clear_streak = 0
+        else:
+            self.person_clear_streak += 1
+            self.person_detect_streak = 0
+
+        trigger_count = max(1, int(self.get_parameter('person_pause_trigger_count').value))
+        clear_count = max(1, int(self.get_parameter('person_pause_clear_count').value))
+        if self.person_detect_streak >= trigger_count:
+            self.person_pause_active = True
+        elif self.person_clear_streak >= clear_count:
+            self.person_pause_active = False
+
+    def on_object_poses(self, msg: String):
+        target_class = str(self.get_parameter('person_target_class').value).strip()
+        try:
+            payload = json.loads(msg.data) if msg.data else {}
+        except Exception:
+            self.person_candidates = []
+            return
+        candidates = []
+        objects = payload.get('objects', [])
+        if isinstance(objects, list):
+            for item in objects:
+                try:
+                    if str(item.get('class_name', '')).strip() != target_class:
+                        continue
+                    candidates.append({
+                        'x_m': float(item['x_m']),
+                        'y_m': float(item['y_m']),
+                        'z_m': float(item.get('z_m', 0.0)),
+                    })
+                except Exception:
+                    continue
+        self.person_candidates = candidates
+
+    def current_pose_in_global(self):
+        target_frame = str(self.get_parameter('global_frame').value)
+        try:
+            transform = self.tf_buffer.lookup_transform(target_frame, 'base_link', Time())
+            t = transform.transform.translation
+            q = transform.transform.rotation
+            yaw = math.atan2(
+                2.0 * (q.w * q.z + q.x * q.y),
+                1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+            )
+            return (float(t.x), float(t.y), float(yaw))
+        except TransformException:
+            return self.current_pose
+
+    def person_visible_for_pause(self, visible_now: bool) -> bool:
+        if not visible_now:
+            return False
+        if not self.person_candidates:
+            return True
+        pose = self.current_pose_in_global()
+        if pose is None:
+            return True
+        robot_x, robot_y, _ = pose
+        min_distance = min(
+            math.hypot(float(item.get('x_m', 0.0)) - robot_x, float(item.get('y_m', 0.0)) - robot_y)
+            for item in self.person_candidates
+        )
+        return min_distance <= float(self.get_parameter('person_pause_distance_m').value)
+
     def resolve_speed_scale(self, speed_hint: str) -> float:
         hint = str(speed_hint or 'normal').strip().lower()
         if hint == 'slow':
@@ -137,6 +239,44 @@ class NavigateToPoseServer(Node):
 
     def stop_robot(self):
         self.cmd_vel_pub.publish(Twist())
+
+    def person_pause_enabled_for_target(self, target_name: str) -> bool:
+        if not bool(self.get_parameter('person_pause_enabled').value):
+            return False
+        normalized = str(target_name or '').strip().lower()
+        if normalized.startswith('approach:'):
+            normalized = normalized.split(':', 1)[1].strip()
+        person_target = str(self.get_parameter('person_target_class').value).strip().lower()
+        return bool(person_target) and normalized != person_target
+
+    def wait_while_person_blocked(self, goal_handle, target_name: str, deadline: float, result):
+        if not self.person_pause_enabled_for_target(target_name):
+            return None
+        pause_logged = False
+        while rclpy.ok() and self.person_pause_active:
+            if not pause_logged:
+                self.get_logger().info(f'person pause engaged: {target_name}')
+                pause_logged = True
+            self.stop_robot()
+            if self.emergency_stop_active:
+                goal_handle.abort()
+                result.success = False
+                result.outcome = f'emergency_stop:{target_name}'
+                return result
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+                result.success = False
+                result.outcome = f'canceled:{target_name}'
+                return result
+            if time.time() > deadline:
+                goal_handle.abort()
+                result.success = False
+                result.outcome = f'timeout:{target_name}'
+                return result
+            time.sleep(0.05)
+        if pause_logged:
+            self.get_logger().info(f'person pause cleared: {target_name}')
+        return None
 
     def wrap_angle(self, angle: float) -> float:
         return math.atan2(math.sin(angle), math.cos(angle))
@@ -195,6 +335,10 @@ class NavigateToPoseServer(Node):
                 result.success = False
                 result.outcome = f'emergency_stop:{target_name}'
                 return result
+
+            blocked = self.wait_while_person_blocked(goal_handle, target_name, deadline, result)
+            if blocked is not None:
+                return blocked
 
             if goal_handle.is_cancel_requested:
                 self.stop_robot()
@@ -258,88 +402,97 @@ class NavigateToPoseServer(Node):
             requested_yaw if abs(requested_yaw) > 1e-6 else target.get('yaw_rad', self.get_parameter('default_goal_yaw_rad').value)
         )
         qx, qy, qz, qw = self.yaw_to_quaternion(desired_yaw)
-
-        nav_goal = Nav2NavigateToPose.Goal()
-        nav_goal.pose = PoseStamped()
-        nav_goal.pose.header.frame_id = str(self.get_parameter('global_frame').value)
-        nav_goal.pose.header.stamp = self.get_clock().now().to_msg()
-        nav_goal.pose.pose.position.x = float(target.get('x_m', 0.0))
-        nav_goal.pose.pose.position.y = float(target.get('y_m', 0.0))
-        nav_goal.pose.pose.orientation.x = qx
-        nav_goal.pose.pose.orientation.y = qy
-        nav_goal.pose.pose.orientation.z = qz
-        nav_goal.pose.pose.orientation.w = qw
-
-        goal_response = {'handle': None, 'error': None}
-        goal_event = threading.Event()
-
-        def on_goal_response(fut):
-            try:
-                goal_response['handle'] = fut.result()
-            except Exception as exc:
-                goal_response['error'] = exc
-            finally:
-                goal_event.set()
-
-        send_future = self.nav2_client.send_goal_async(nav_goal)
-        send_future.add_done_callback(on_goal_response)
-
         deadline = time.time() + float(goal_handle.request.timeout_sec or 30)
-        while rclpy.ok() and not goal_event.is_set():
+        nav2_goal_handle = None
+        nav2_result_future = None
+        paused_by_person = False
+
+        while rclpy.ok():
+            blocked = self.wait_while_person_blocked(goal_handle, target_name, deadline, result)
+            if blocked is not None:
+                if nav2_goal_handle is not None:
+                    self.cancel_nav2_goal(nav2_goal_handle)
+                return blocked
+
+            if nav2_goal_handle is None:
+                nav_goal = Nav2NavigateToPose.Goal()
+                nav_goal.pose = PoseStamped()
+                nav_goal.pose.header.frame_id = str(self.get_parameter('global_frame').value)
+                nav_goal.pose.header.stamp = self.get_clock().now().to_msg()
+                nav_goal.pose.pose.position.x = float(target.get('x_m', 0.0))
+                nav_goal.pose.pose.position.y = float(target.get('y_m', 0.0))
+                nav_goal.pose.pose.orientation.x = qx
+                nav_goal.pose.pose.orientation.y = qy
+                nav_goal.pose.pose.orientation.z = qz
+                nav_goal.pose.pose.orientation.w = qw
+
+                goal_response = {'handle': None, 'error': None}
+                goal_event = threading.Event()
+
+                def on_goal_response(fut):
+                    try:
+                        goal_response['handle'] = fut.result()
+                    except Exception as exc:
+                        goal_response['error'] = exc
+                    finally:
+                        goal_event.set()
+
+                send_future = self.nav2_client.send_goal_async(nav_goal)
+                send_future.add_done_callback(on_goal_response)
+
+                while rclpy.ok() and not goal_event.is_set():
+                    blocked = self.wait_while_person_blocked(goal_handle, target_name, deadline, result)
+                    if blocked is not None:
+                        return blocked
+                    if self.emergency_stop_active:
+                        self.stop_robot()
+                        goal_handle.abort()
+                        result.success = False
+                        result.outcome = f'emergency_stop:{target_name}'
+                        return result
+                    if goal_handle.is_cancel_requested:
+                        goal_handle.canceled()
+                        result.success = False
+                        result.outcome = f'canceled:{target_name}'
+                        return result
+                    if time.time() > deadline:
+                        goal_handle.abort()
+                        result.success = False
+                        result.outcome = f'timeout:{target_name}'
+                        return result
+                    time.sleep(0.05)
+
+                if goal_response['error'] is not None:
+                    goal_handle.abort()
+                    result.success = False
+                    result.outcome = f'nav2_send_failed:{target_name}'
+                    return result
+
+                nav2_goal_handle = goal_response['handle']
+                if nav2_goal_handle is None or not nav2_goal_handle.accepted:
+                    goal_handle.abort()
+                    result.success = False
+                    result.outcome = f'nav2_rejected:{target_name}'
+                    return result
+                nav2_result_future = nav2_goal_handle.get_result_async()
+                paused_by_person = False
+
+            if self.person_pause_enabled_for_target(target_name) and self.person_pause_active:
+                self.cancel_nav2_goal(nav2_goal_handle)
+                self.stop_robot()
+                nav2_goal_handle = None
+                nav2_result_future = None
+                paused_by_person = True
+                continue
+
             if self.emergency_stop_active:
+                self.cancel_nav2_goal(nav2_goal_handle)
                 self.stop_robot()
                 goal_handle.abort()
                 result.success = False
                 result.outcome = f'emergency_stop:{target_name}'
                 return result
             if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-                result.success = False
-                result.outcome = f'canceled:{target_name}'
-                return result
-            if time.time() > deadline:
-                goal_handle.abort()
-                result.success = False
-                result.outcome = f'timeout:{target_name}'
-                return result
-            time.sleep(0.05)
-
-        if goal_response['error'] is not None:
-            goal_handle.abort()
-            result.success = False
-            result.outcome = f'nav2_send_failed:{target_name}'
-            return result
-
-        nav2_goal_handle = goal_response['handle']
-        if nav2_goal_handle is None or not nav2_goal_handle.accepted:
-            goal_handle.abort()
-            result.success = False
-            result.outcome = f'nav2_rejected:{target_name}'
-            return result
-
-        result_state = {'wrapped': None, 'error': None}
-        result_event = threading.Event()
-
-        def on_nav2_result(fut):
-            try:
-                result_state['wrapped'] = fut.result()
-            except Exception as exc:
-                result_state['error'] = exc
-            finally:
-                result_event.set()
-
-        nav2_result_future = nav2_goal_handle.get_result_async()
-        nav2_result_future.add_done_callback(on_nav2_result)
-
-        while rclpy.ok() and not result_event.is_set():
-            if self.emergency_stop_active:
-                self.cancel_nav2_goal(nav2_goal_handle)
-                self.stop_robot()
-                goal_handle.abort()
-                result.success = False
-                result.outcome = f'emergency_stop:{target_name}'
-                return result
-            if goal_handle.is_cancel_requested:
                 self.cancel_nav2_goal(nav2_goal_handle)
                 goal_handle.canceled()
                 result.success = False
@@ -351,38 +504,38 @@ class NavigateToPoseServer(Node):
                 result.success = False
                 result.outcome = f'timeout:{target_name}'
                 return result
-            time.sleep(0.05)
+            if nav2_result_future is None or not nav2_result_future.done():
+                time.sleep(0.05)
+                continue
 
-        if result_state['error'] is not None or result_state['wrapped'] is None:
+            wrapped = nav2_result_future.result()
+            status = int(wrapped.status)
+            nav2_result = wrapped.result
+            error_code = getattr(nav2_result, 'error_code', 0)
+            error_msg = getattr(nav2_result, 'error_msg', '')
+
+            if status == GoalStatus.STATUS_SUCCEEDED:
+                goal_handle.succeed()
+                result.success = True
+                result.outcome = f'arrived:{target_name}'
+                return result
+            if status == GoalStatus.STATUS_CANCELED and paused_by_person:
+                nav2_goal_handle = None
+                nav2_result_future = None
+                continue
+            if status == GoalStatus.STATUS_CANCELED:
+                goal_handle.canceled()
+                result.success = False
+                result.outcome = f'canceled:{target_name}'
+                return result
+
             goal_handle.abort()
+            suffix = f':{error_code}'
+            if error_msg:
+                suffix += f':{error_msg}'
             result.success = False
-            result.outcome = f'nav2_result_failed:{target_name}'
+            result.outcome = f'nav2_failed:{target_name}{suffix}'
             return result
-
-        wrapped = result_state['wrapped']
-        status = int(wrapped.status)
-        nav2_result = wrapped.result
-        error_code = getattr(nav2_result, 'error_code', 0)
-        error_msg = getattr(nav2_result, 'error_msg', '')
-
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            goal_handle.succeed()
-            result.success = True
-            result.outcome = f'arrived:{target_name}'
-            return result
-        if status == GoalStatus.STATUS_CANCELED:
-            goal_handle.canceled()
-            result.success = False
-            result.outcome = f'canceled:{target_name}'
-            return result
-
-        goal_handle.abort()
-        suffix = f':{error_code}'
-        if error_msg:
-            suffix += f':{error_msg}'
-        result.success = False
-        result.outcome = f'nav2_failed:{target_name}{suffix}'
-        return result
 
     def execute(self, goal_handle):
         target_name = goal_handle.request.target_name

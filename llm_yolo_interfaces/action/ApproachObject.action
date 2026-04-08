@@ -1,4 +1,5 @@
 string target_class
+string object_selector
 int32 timeout_sec
 float32 approach_distance_m
 string speed_hint

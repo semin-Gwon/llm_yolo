@@ -69,10 +69,13 @@
 - perception 기반 접근 goal pose 생성 로직 구현 완료
 - 기존 navigation backend를 재사용한 객체 접근 경로 구현 완료
 - `chair 앞으로 가` 기준 접근 동작 검증 완료
+- `tv` 클래스에 대해서도 탐지 / pose 추정 / 접근 검증 완료
+- `couch`, `dining table`, `bed`는 현재 YOLO 경로에서 탐지/pose 추정이 불안정해 운영 대상에서 제외
 
 ## 11. 현재 운영 기준 정리 완료
 - named place는 `center` 하나로 운영
 - visible object는 `red_box`, `pink_box`, `yellow_box`, `blue_box` 기준 정리
+- 현재 YOLO/LLM 운영 객체 클래스는 `chair`, `tv` 기준으로 유지
 - direct `/cmd_vel` 경로는 fallback / 비교용으로 유지
 - Nav2는 우선 검증 경로로 유지
 
@@ -95,6 +98,17 @@
 - 표준 모니터링 절차의 재사용 가능성 확인 완료
 - `center 로 가`, `chair 찾아`, 조건부 복귀, 조건부 재시도, 대체 대상 탐색, `chair 앞으로 가`, `긴급 정지`/`정지 해제` 경로 재검증 완료
 
+## 15. Person 대응 및 동적 객체 정책 1차/2차 완료
+- `navigate_to_pose_server`에 `person` 검출 기반 pause / resume 로직 구현 완료
+- 이동/접근 중 `/perception/visible_objects`에 `person`이 포함되면 일시정지하도록 구현 완료
+- `person` 미검출이 연속적으로 확인되면 동일 goal로 자동 재개하도록 구현 완료
+- 목표 자체가 `person`인 경우 pause 정책을 적용하지 않도록 예외 처리 완료
+- 관련 sim 파라미터(`person_pause_enabled`, trigger / clear count) 추가 완료
+- `person` pose 기반 거리 조건(`person_pause_distance_m`) 추가 완료
+- 가까운 `person`일 때만 pause, 먼 `person`은 무시하는 정책 검증 완료
+- `chair 앞으로 가` 도중 person 개입 / 이탈 시 pause / resume 실검증 완료
+- Python 문법 검사 및 `go2_skill_server_sim` 패키지 빌드 검증 완료
+
 ## 현재 시점 요약
 - sim MVP 완료
 - YOLO 1차 완료
@@ -103,5 +117,6 @@
 - perception 기반 `approach_object` 1차 완료
 - direct / Nav2 두 주행 경로 구조 검증 완료
 - emergency stop / clear 검증 완료
+- person 검출 기반 pause / resume 및 거리 조건 검증 완료
 - 운영/통합 검증 1차 문서화 및 도구화 완료
 - 운영/통합 검증 실검증 완료

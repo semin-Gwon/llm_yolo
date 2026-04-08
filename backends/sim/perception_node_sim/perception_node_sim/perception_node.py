@@ -222,6 +222,8 @@ class PerceptionNode(Node):
                         'x_m': float(point_global[0]),
                         'y_m': float(point_global[1]),
                         'z_m': float(point_global[2]),
+                        'bbox_area_norm': float(max(0.0, (float(x1) - float(x0)) * (float(y1) - float(y0))) / float(msg.width * msg.height)),
+                        'bbox_center_x_norm': float(u) / float(msg.width) if msg.width > 0 else 0.5,
                     })
         self.objects = sorted(set(names))
         self.last_object_poses = object_poses

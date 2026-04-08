@@ -53,13 +53,13 @@ MVP에서 제외하는 기능은 본문에 넣지 않고 문서 최하단 주석
 - 자연어 명령 해석기:
   - 현재 MVP: rule-based parser + Ollama 기반 LLM 경로 검증 완료
   - 현재 추가 상태: `mission_plan` 2단계 복합 명령 및 조건부 복귀 검증 완료
-  - 다음 단계: `approach_object` intent와 perception 기반 객체 접근 경로 추가
-  - 그 다음 단계: `run_if` 기반 3단계 이상 복합 명령과 조건부 재시도 확장
+  - 현재 추가 상태: `approach_object` intent와 perception 기반 객체 접근 경로 1차 검증 완료
+  - 다음 단계: 객체 탐색/접근 일반화와 person 대응 정책 확장
   - 이후 단계: OpenRouter 기반 클라우드 LLM 경로 추가 및 로컬/클라우드 backend 분기
 - 실시간 인지:
   - 현재 MVP: sim ground truth 기반 인지 + YOLO 경로 기본 검증 완료
-  - 다음 단계: YOLO bbox + depth + TF 기반 객체 위치 추정
-  - 그 다음 단계: YOLO 경로 안정화 및 대상 클래스 확장
+  - 현재 추가 상태: YOLO bbox + depth + TF 기반 객체 위치 추정 1차 검증 완료
+  - 다음 단계: 객체 pose 추정 안정화와 대상 클래스 확장
   - 이후 단계: VLM API 연동, YOLO + VLM 결합, open-vocabulary 실험
 - 위치추정 / 주행:
   - 현재 MVP: Nav2 기반 goal 전달을 우선 검증 경로로 사용
@@ -367,7 +367,7 @@ real 기준:
 
 ## 10. 구현 단계
 
-### Phase 0. 공통 인터페이스와 흐름 고정
+### Phase 1. 공통 인터페이스와 흐름 고정
 - llm_yolo_interfaces 정의
 - mission_manager_node 구현
 - llm_command_router_node 구현
@@ -378,7 +378,7 @@ real 기준:
 완료 조건:
 - intent -> mission -> action 흐름이 시뮬레이터 없이도 검증 가능
 
-### Phase 1. Sim backend 완성
+### Phase 2. Sim backend 완성
 - go2_skill_server_sim 구현
 - perception_node_sim 구현
 - sim launch 연결
@@ -388,7 +388,7 @@ real 기준:
 완료 조건:
 - sim에서 navigate, scan, find_object, cancel 시퀀스가 동작
 
-### Phase 2. Sim 기반 미션 검증
+### Phase 3. Sim 기반 미션 검증
 - named place 이동
 - scan_scene
 - find_object fallback 시퀀스
@@ -401,12 +401,12 @@ real 기준:
 완료 조건:
 - sim에서 MVP 시나리오를 반복 재현 가능
 
-### Phase 3. Sim에서 실제 YOLO + 실제 LLM 연결
+### Phase 4. Sim에서 실제 YOLO + 실제 LLM 연결
 - perception_node_sim을 sim 카메라 입력 기반 YOLO로 확장
 - llm_command_router_node를 실제 LLM backend에 연결
 - ground-truth perception과 YOLO perception을 launch/config로 선택 가능하게 유지
 - 현재 rule-based parser와 실제 LLM parser를 비교 검증
-- core 안정화와 운영/통합 검증(Phase 3.6)은 병행할 수 있으나, 3.6은 회귀 방지와 관측 가능성 확보 목적에 가깝다
+- core 안정화와 운영/통합 검증(Phase 4-10)은 병행할 수 있으나, 4-10은 회귀 방지와 관측 가능성 확보 목적에 가깝다
 
 상태: core 구현 및 1차 검증 완료, 안정화/확장 항목 잔존
 
@@ -420,7 +420,7 @@ real 기준:
 - sim에서 실제 LLM 기반 intent 생성이 반복적으로 동작
 - 단일 명령뿐 아니라 확장 가능한 schema 기반으로 발전 가능한 구조가 확보될 것
 
-### Phase 3.05. Perception 기반 객체 접근
+### Phase 4-1. Perception 기반 객체 접근
 - `approach_object` intent 추가
 - `chair 앞으로 가` 같은 명령을 perception 기반으로 처리
 - YOLO bbox + depth + camera_info + TF를 사용해 객체 위치를 직접 추정
@@ -445,7 +445,71 @@ real 기준:
 - 더 많은 객체 클래스에 대한 pose 추정 안정화
 - typed message 승격 여부 검토
 
-### Phase 3.1. VLM 기반 의미 인지 확장
+### Phase 4-2. 객체 탐색/접근 일반화
+- `approach_object`를 `chair` 단일 시나리오에서 더 넓은 맵/더 다양한 객체로 확장
+- `find_object -> object pose 추정 -> approach_object` 흐름을 하나의 운영 시나리오로 재검증
+- 접근 거리, 접근 yaw, 접근 실패 조건을 객체 종류별로 조정 가능한 구조로 정리
+- fallback 탐색 후 pose 재획득과 접근 재시도 흐름을 정리
+
+상태: 최우선순위
+
+세부 작업:
+- 현재 운영 객체 목록(`chair`, `tv`) 기준으로 탐지/pose 추정/접근 경로를 안정화
+- `chair`, `tv`에 대해 `/perception/object_poses`가 반복적으로 안정적으로 나오는지 검증
+- `couch`, `dining table`, `bed`는 후속 perception 모델 변경 또는 튜닝 전까지 운영 대상에서 제외
+- bbox 중심 depth 기반 pose 추정의 노이즈/오차 특성을 클래스별로 정리
+- 접근 거리와 최종 yaw를 클래스별 파라미터로 분리
+- `chair 찾아서 앞으로 가`, `tv 찾아서 앞으로 가` 같은 `find -> approach` 시나리오를 `mission_plan`으로 연결
+- fallback 탐색 후 재획득한 객체에 대해서도 pose 재추정과 접근이 이어지는지 검증
+- 넓은 맵에서 탐색 후 접근까지의 통합 시나리오와 실패 조건을 문서화
+
+완료 조건:
+- `chair`, `tv` 두 클래스에서 pose 추정과 접근이 반복 재현 가능
+- `찾고 -> 접근` 흐름이 동일한 mission 경로에서 반복 동작
+- 접근 거리와 yaw가 config로 조정 가능
+- 객체가 보이는 상태와 fallback 후 재획득 상태 모두에서 접근 가능
+- 현재 후보 클래스 중 어떤 클래스가 `운영 가능`, `추가 튜닝 필요`, `현재 제외`인지 표 형태로 정리 가능
+
+### Phase 4-3. 속성 기반 개체 선택
+- 동일 클래스 객체가 여러 개 있을 때 `가장 가까운 것` 외의 기준으로 대상을 선택할 수 있게 확장
+- `가까운 chair`, `먼 chair` 같은 표현을 처리
+- 현재 클래스 기반 접근 구조 위에 후보 속성 계산과 disambiguation layer를 추가
+
+상태: 예정
+
+세부 작업:
+- 객체 후보별 속성 계산 경로 추가
+  - 상대 거리(`near` / `far`)
+- 자연어 parser / LLM schema에 object qualifier 추가
+- 여러 후보 중 qualifier에 가장 잘 맞는 대상을 고르는 ranking 로직 추가
+- qualifier가 없을 때는 현재와 동일하게 기본 선택 정책(가장 가까운 후보) 유지
+- 1차 범위는 관계 기반 표현(`문 옆`, `테이블 앞`), 색 기반 표현, 좌우/크기 구분을 제외하고 거리 속성부터 지원
+
+완료 조건:
+- 같은 클래스 객체가 2개 이상 있을 때 `near/far` 기반 선택 가능
+- qualifier가 없는 기존 명령은 회귀 없이 기존 정책으로 동작
+- `chair 앞으로 가`와 `가까운 chair 앞으로 가`가 회귀 없이 동작
+
+### Phase 4-4. Person 대응 및 동적 객체 정책
+- `person` 검출 시 로봇이 취할 안전 정책을 추가
+- 기본 장애물 회피는 navigation stack이 담당하고, 사람 검출은 상위 안전 트리거로 사용
+- `pause`, `emergency_stop`, `approach 중단` 중 어떤 정책을 언제 쓸지 정리
+- 사람 검출 시 미션 지속/중단/재개 조건을 정의
+
+상태: 1차/2차 구현 및 검증 완료, 추가 고도화 항목만 남음
+
+세부 작업:
+- 사람 검출 시 `pause`와 `emergency_stop` 정책 분리 유지
+- 접근 중 사람 개입 시 현재 goal hold / resume 정책 추가 고도화
+- person pose 기반 거리 조건과 히스테리시스 조건 추가 튜닝
+- 필요 시 시야 중심/경로 전방 기준 추가
+
+완료 조건:
+- 이동 또는 접근 중 `person` 검출 시 정책에 맞게 멈춤 또는 중단
+- 사람 사라짐 이후 재개 정책이 일관되게 동작
+- `person` 대응이 기존 mission 흐름을 깨지 않음
+
+### Phase 4-5. VLM 기반 의미 인지 확장
 - sim 카메라 이미지를 입력으로 사용하는 VLM backend 경로 추가
 - 1차 범위는 장면 설명과 질의응답 기반의 설명 전용 계층으로 제한
 - YOLO 결과를 VLM이 설명 텍스트로 보완하는 구조만 우선 검토
@@ -455,7 +519,7 @@ real 기준:
 - 텍스트 질의 기반 장면 설명과 의미론적 객체 확인 경로 추가
 - **[아키텍처 제언]** VLM API의 높은 네트워크 Latency(수 초)로 인한 메인 스레드 블로킹 방지를 위해, 해당 계층을 반드시 **비동기(Async) 액션 서버 구조**로 설계할 것
 
-상태: 최우선순위
+상태: 후순위
 
 세부 작업:
 - VLM API 후보 선정 및 backend 추상화
@@ -471,7 +535,7 @@ real 기준:
 - YOLO 결과를 VLM이 보조 설명하는 경로 확인
 - 최소 1개 시나리오에서 장면 설명과 질의응답이 재현 가능
 
-### Phase 3.2. OpenRouter 기반 클라우드 LLM 경로
+### Phase 4-6. OpenRouter 기반 클라우드 LLM 경로
 - Ollama 외에 OpenRouter 기반 클라우드 LLM backend 추가
 - 로컬(Ollama) / 클라우드(OpenRouter) backend를 launch/config로 선택 가능하게 유지
 - 네트워크 실패, timeout, invalid JSON에 대한 fallback 정책 정리
@@ -498,7 +562,7 @@ real 기준:
 - timeout / invalid JSON / fallback 경로가 기존 Ollama 경로를 깨지 않고 동작
 - 기본값이 로컬 경로를 유지하고, 실수로 클라우드 호출이 기본 활성화되지 않음
 
-### Phase 3.3. mission_plan 일반화
+### Phase 4-7. mission_plan 일반화
 - 3단계 이상 순차 명령 지원
 - `run_if` 기반 조건 실행(`always`, `previous_failed`, `previous_succeeded`) 추가
 - `chair 찾고 없으면 center로 가서 다시 찾아` 같은 조건부 재시도 패턴 지원
@@ -513,7 +577,7 @@ real 기준:
 - `red_box 찾고 없으면 yellow_box 찾아` 처리 가능
 - step 조건에 따라 불필요한 이동/탐색이 수행되지 않음
 
-### Phase 3.25. Direct 주행 제어 확장
+### Phase 4-8. Direct 주행 제어 확장
 - `navigate_to_pose_server` direct 모드에 `speed_hint`(slow | normal | fast) 반영
 - `Intent`/`mission_plan step`에 속도 힌트 전달 경로 추가
 - rule-based / LLM 모두 속도 관련 자연어를 speed_hint로 정규화
@@ -532,7 +596,7 @@ real 기준:
 - `speed_hint`의 실질 반영은 direct 모드에서 가장 명확함
 - Nav2 모드에서는 현재 goal 전달 구조상 속도 힌트 활용이 제한적이며, 추후 controller 파라미터 연계가 필요함
 
-### Phase 3.5. Sim Nav2 전환
+### Phase 4-9. Sim Nav2 전환
 - sim Nav2 bringup 가능 여부 확인
 - Nav2 입력으로 사용할 sim odom/tf/obstacle source 정리
 - `navigate_to_pose_server`를 direct `/cmd_vel` 제어기에서 Nav2 goal bridge로 전환
@@ -552,7 +616,7 @@ real 기준:
 - 장애물이 있는 경로에서 direct `/cmd_vel`가 아니라 Nav2 planner/controller가 경로를 선택
 - 상위 계층(`llm_command_router`, `mission_manager`, `mission_plan`) 수정은 최소화될 것
 
-### Phase 3.6. 운영 가시화 및 통합 검증
+### Phase 4-10. 운영 가시화 및 통합 검증
 - RViz2 기반 상태 모니터링과 최소 커스텀 패널 구성 검토
 - mission / perception / navigation / safety 상태를 한 화면에서 확인 가능한 구조 정리
 - 시나리오별 통합 테스트 세트와 기대 결과를 문서화
@@ -595,7 +659,7 @@ real 기준:
 - `chair 찾고 없으면 center로 가서 다시 찾아`: 첫 탐색 실패 시에만 이동/재탐색 step이 실행되어야 함
 - `yellow_box 찾고 없으면 red_box 찾아`: 첫 대상 실패 후 대체 대상 탐색으로 넘어가고, 즉시 abort하지 않아야 함
 
-### Phase 4. Real backend 연결
+### Phase 5. Real backend 연결
 - go2_skill_server_real 구현
 - perception_node_real 연결
 - onboard_min_guard 연결
@@ -604,7 +668,7 @@ real 기준:
 완료 조건:
 - same mission flow가 real backend에서도 동작
 
-### Phase 5. 실기체 검증
+### Phase 6. 실기체 검증
 - stop/cancel/deadman 우선 검증
 - 짧은 이동 검증
 - scan_scene와 제한된 find_object 검증
@@ -612,7 +676,7 @@ real 기준:
 완료 조건:
 - real 모드에서 MVP 핵심 기능 검증 완료
 
-### Phase 6. 배포 준비 및 엣지 최적화
+### Phase 7. 배포 준비 및 엣지 최적화
 - YOLO 계열 모델의 ONNX export 가능성 사전 검토
 - 추후 TensorRT / Jetson 배포를 위한 입력/출력 인터페이스 정리
 - sim2real 전환 시 latency 병목 지점 정리
@@ -636,18 +700,20 @@ real 기준:
 
 ## 11. 개발 우선순위
 1. sim MVP 완료 상태 유지
-2. perception 기반 객체 접근(`approach_object`, YOLO bbox + depth + TF)
-3. 운영 가시화 및 통합 테스트 체계화
-4. sim에서 YOLO 연결 안정화 및 대상 클래스 확장
-5. sim에서 실제 LLM 연결 안정화
-6. sim에서 YOLO + LLM 조합 검증 고도화
-7. mission_plan 일반화(`run_if`, 3단계 이상, 조건부 재시도)
-8. VLM API 연동 및 YOLO + VLM 결합
-9. OpenRouter 기반 클라우드 LLM 경로 추가
-10. sim 환경 feature 확장 및 localization 안정화
-11. real backend 연결
-12. 마지막에 real 하드웨어 세부 튜닝
-14. Nav2 기반 goal bridge 전환은 localization 안정화 이후 재개
+2. 객체 탐색/접근 일반화(`find_object -> pose 추정 -> approach_object`)
+3. 속성 기반 개체 선택(`left/right/near/far/large/small`)
+4. person 대응 및 동적 객체 정책
+5. 운영 가시화 및 통합 테스트 체계화 유지
+6. sim에서 YOLO 연결 안정화 및 대상 클래스 확장
+7. sim에서 실제 LLM 연결 안정화
+8. sim에서 YOLO + LLM 조합 검증 고도화
+9. mission_plan 일반화(`run_if`, 3단계 이상, 조건부 재시도)
+10. VLM API 연동 및 YOLO + VLM 결합
+11. OpenRouter 기반 클라우드 LLM 경로 추가
+12. sim 환경 feature 확장 및 localization 안정화
+13. real backend 연결
+14. 마지막에 real 하드웨어 세부 튜닝
+15. Nav2 기반 goal bridge 전환은 localization 안정화 이후 재개
 
 ---
 
@@ -655,8 +721,8 @@ real 기준:
 현재 단계의 핵심은 sim MVP를 끝낸 상태에서 바로 real로 넘어가는 것이 아니라, sim 안에서 YOLO와 실제 LLM까지 먼저 붙여 상위 기능 완성도를 높이는 것이다.
 현재 navigation 기본 경로는 Nav2 후보이며, direct `/cmd_vel` 경로는 fallback/비교용으로 유지한다.
 단기 다음 우선순위였던 speed_hint 기반 속도 제어와 latched emergency_stop / clear 경로는 구현 및 검증이 완료됐다.
-`mission_plan` 일반화 1차 구현과 검증도 완료됐으므로, 이제 다음 단계는 `perception 기반 객체 접근(approach_object)`을 최우선으로 구현하는 것이다.
-그 다음 `운영 가시화/통합 테스트 체계화`, `VLM API 연동`, `YOLO + VLM 결합`, `OpenRouter 기반 클라우드 LLM 경로` 순서로 확장한다.
+`mission_plan` 일반화 1차와 `approach_object` 1차 구현/검증도 완료됐으므로, 이제 다음 단계는 `객체 탐색/접근 일반화`와 그 위의 `속성 기반 개체 선택`이다.
+그 다음 `person 대응 정책`, `운영 가시화/통합 테스트 체계 유지`, `YOLO 대상 클래스 안정화`, `VLM API 연동`, `OpenRouter 기반 클라우드 LLM 경로` 순서로 확장한다.
 
 ---
 
