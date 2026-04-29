@@ -3,6 +3,10 @@ llm_command_router_node:
     mode: llm
     named_places:
     - center
+    - chair_room
+    - commode_room
+    - tv_room
+    - living_room
     object_classes:
     - chair
     - tv

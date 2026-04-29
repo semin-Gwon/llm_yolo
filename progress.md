@@ -79,6 +79,12 @@
 - direct `/cmd_vel` 경로는 fallback / 비교용으로 유지
 - Nav2는 우선 검증 경로로 유지
 
+## 16. Named Place 확장 완료
+- `sim_named_places.yaml`에 `chair_room`, `commode_room`, `tv_room`, `living_room` 추가 완료
+- 현재 위치 `/odom` 기준 좌표를 named place 절대좌표로 등록 완료
+- `llm_params.yaml`의 `named_places` 허용 목록도 동일하게 확장 완료
+- LLM / 자연어 경로에서 새 named place를 target으로 사용할 수 있도록 반영 완료
+
 ## 12. 문서화 완료
 - `README.md` 업데이트 완료
 - `plan.md` 업데이트 완료
@@ -118,5 +124,6 @@
 - direct / Nav2 두 주행 경로 구조 검증 완료
 - emergency stop / clear 검증 완료
 - person 검출 기반 pause / resume 및 거리 조건 검증 완료
+- named place 절대좌표 확장 완료
 - 운영/통합 검증 1차 문서화 및 도구화 완료
 - 운영/통합 검증 실검증 완료
