@@ -14,6 +14,12 @@ def generate_launch_description():
         ),
         Node(
             package='go2_skill_server_real',
+            executable='approach_object_server',
+            name='approach_object_server',
+            parameters=['/home/jnu/llm_yolo/configs/real/real_nav_params.yaml'],
+        ),
+        Node(
+            package='go2_skill_server_real',
             executable='navigate_to_pose_server',
             name='navigate_to_pose_server',
         ),

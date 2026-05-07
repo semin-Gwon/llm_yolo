@@ -1,2 +1,15 @@
-real_nav:
-  enabled: false
+approach_object_server:
+  ros__parameters:
+    object_pose_topic: /perception/object_poses
+    control_request_topic: /api/sport/request
+    object_pose_frame: camera_link
+    default_approach_distance_m: 0.5
+    heading_align_threshold_rad: 0.25
+    heading_stop_threshold_rad: 0.6
+    max_linear_speed_mps: 0.3
+    max_angular_speed_radps: 0.4
+    linear_gain: 0.6
+    angular_gain: 1.2
+    control_period_sec: 0.1
+    stale_pose_timeout_sec: 1.0
+    send_balance_stand_on_start: true

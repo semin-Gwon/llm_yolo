@@ -8,6 +8,17 @@ perception_node_sim:
     sim_visible_objects_topic: /sim/visible_objects
     normalized_objects_topic: /perception/visible_objects
     camera_image_topic: /camera/color/image_raw
+    camera_depth_topic: /camera/depth/image_rect_raw
+    camera_info_topic: /camera/camera_info
     yolo_model: yolo11n.pt
     yolo_conf_threshold: 0.25
     yolo_target_classes: []
+    depth_mode: bbox_cluster
+    depth_center_patch_radius_px: 2
+    depth_min_valid_m: 0.05
+    depth_max_valid_m: 8.0
+    depth_cluster_gap_m: 0.15
+    depth_cluster_min_pixels: 20
+    depth_center_weight: 1.0
+    depth_size_weight: 0.02
+    depth_near_penalty_weight: 0.15

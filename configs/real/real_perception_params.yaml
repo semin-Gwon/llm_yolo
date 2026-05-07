@@ -1,3 +1,22 @@
 perception_node_real:
   ros__parameters:
     detector_backend: yolo
+    normalized_objects_topic: /perception/visible_objects
+    object_pose_topic: /perception/object_poses
+    camera_image_topic: /camera/color/image_raw
+    camera_depth_topic: /camera/depth/image_rect_raw
+    camera_info_topic: /camera/color/camera_info
+    object_pose_frame: camera_link
+    fallback_camera_frame: camera_color_optical_frame
+    yolo_model: yolo11n.pt
+    yolo_conf_threshold: 0.25
+    yolo_target_classes: ['chair']
+    depth_mode: bbox_cluster
+    depth_center_patch_radius_px: 2
+    depth_min_valid_m: 0.05
+    depth_max_valid_m: 8.0
+    depth_cluster_gap_m: 0.15
+    depth_cluster_min_pixels: 20
+    depth_center_weight: 1.0
+    depth_size_weight: 0.02
+    depth_near_penalty_weight: 0.15

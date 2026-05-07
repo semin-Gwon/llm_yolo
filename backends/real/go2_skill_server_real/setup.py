@@ -18,6 +18,7 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
+            'approach_object_server = go2_skill_server_real.approach_object_server:main',
             'navigate_to_pose_server = go2_skill_server_real.navigate_to_pose_server:main',
             'rotate_in_place_server = go2_skill_server_real.rotate_in_place_server:main',
             'scan_scene_server = go2_skill_server_real.scan_scene_server:main',

@@ -27,6 +27,15 @@ class PerceptionNode(Node):
         self.declare_parameter('yolo_model', 'yolo11n.pt')
         self.declare_parameter('yolo_conf_threshold', 0.25)
         self.declare_parameter('yolo_target_classes', [''])
+        self.declare_parameter('depth_mode', 'bbox_cluster')
+        self.declare_parameter('depth_center_patch_radius_px', 2)
+        self.declare_parameter('depth_min_valid_m', 0.05)
+        self.declare_parameter('depth_max_valid_m', 8.0)
+        self.declare_parameter('depth_cluster_gap_m', 0.15)
+        self.declare_parameter('depth_cluster_min_pixels', 20)
+        self.declare_parameter('depth_center_weight', 1.0)
+        self.declare_parameter('depth_size_weight', 0.02)
+        self.declare_parameter('depth_near_penalty_weight', 0.15)
 
         self.mode = str(self.get_parameter('mode').value)
         self.objects = list(self.get_parameter('default_visible_objects').value)
@@ -42,6 +51,7 @@ class PerceptionNode(Node):
         self.last_depth_msg = None
         self.last_camera_info = None
         self.last_object_poses = []
+        self.last_depth_debug = []
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         try:
@@ -108,24 +118,108 @@ class PerceptionNode(Node):
             return depth_mm.astype(np.float32) / 1000.0
         raise ValueError(f'unsupported_depth_encoding:{msg.encoding}')
 
-    def _lookup_depth(self, u: int, v: int) -> float | None:
-        if self.last_depth_msg is None:
-            return None
-        depth = self._depth_to_numpy(self.last_depth_msg)
+    def _valid_depth_mask(self, values: np.ndarray) -> np.ndarray:
+        min_depth = float(self.get_parameter('depth_min_valid_m').value)
+        max_depth = float(self.get_parameter('depth_max_valid_m').value)
+        return np.isfinite(values) & (values >= min_depth) & (values <= max_depth)
+
+    def _lookup_depth_center_patch(self, depth: np.ndarray, u: int, v: int) -> float | None:
         h, w = depth.shape
         if not (0 <= u < w and 0 <= v < h):
             return None
-        half = 2
+        half = int(self.get_parameter('depth_center_patch_radius_px').value)
         x0, x1 = max(0, u - half), min(w, u + half + 1)
         y0, y1 = max(0, v - half), min(h, v + half + 1)
         window = depth[y0:y1, x0:x1]
-        valid = window[np.isfinite(window) & (window > 0.05)]
+        valid = window[self._valid_depth_mask(window)]
         if valid.size == 0:
             center = depth[v, u]
-            if not np.isfinite(center) or center <= 0.05:
+            if not self._valid_depth_mask(np.array([center], dtype=np.float32))[0]:
                 return None
             return float(center)
         return float(np.median(valid))
+
+    def _lookup_depth_bbox_cluster(self, depth: np.ndarray, x0: float, y0: float, x1: float, y1: float):
+        h, w = depth.shape
+        ix0 = max(0, min(w - 1, int(math.floor(x0))))
+        ix1 = max(0, min(w, int(math.ceil(x1))))
+        iy0 = max(0, min(h - 1, int(math.floor(y0))))
+        iy1 = max(0, min(h, int(math.ceil(y1))))
+        if ix1 <= ix0 or iy1 <= iy0:
+            return None, None
+
+        roi = depth[iy0:iy1, ix0:ix1]
+        valid_mask = self._valid_depth_mask(roi)
+        if not np.any(valid_mask):
+            return None, None
+
+        ys, xs = np.nonzero(valid_mask)
+        values = roi[valid_mask].astype(np.float32)
+        order = np.argsort(values)
+        xs = xs[order]
+        ys = ys[order]
+        values = values[order]
+
+        gap = float(self.get_parameter('depth_cluster_gap_m').value)
+        min_pixels = int(self.get_parameter('depth_cluster_min_pixels').value)
+        center_weight = float(self.get_parameter('depth_center_weight').value)
+        size_weight = float(self.get_parameter('depth_size_weight').value)
+        near_penalty = float(self.get_parameter('depth_near_penalty_weight').value)
+
+        roi_center_x = 0.5 * float(ix1 - ix0 - 1)
+        roi_center_y = 0.5 * float(iy1 - iy0 - 1)
+        roi_diag = max(math.hypot(float(ix1 - ix0), float(iy1 - iy0)), 1.0)
+
+        best = None
+        start = 0
+        total = values.size
+        while start < total:
+            end = start + 1
+            while end < total and float(values[end] - values[end - 1]) <= gap:
+                end += 1
+
+            cluster_values = values[start:end]
+            cluster_xs = xs[start:end].astype(np.float32)
+            cluster_ys = ys[start:end].astype(np.float32)
+            pixel_count = int(cluster_values.size)
+            if pixel_count >= min_pixels:
+                median_depth = float(np.median(cluster_values))
+                center_dx = float(np.mean(cluster_xs) - roi_center_x)
+                center_dy = float(np.mean(cluster_ys) - roi_center_y)
+                center_distance_norm = math.hypot(center_dx, center_dy) / roi_diag
+                score = (
+                    center_weight * (1.0 - center_distance_norm)
+                    + size_weight * float(pixel_count)
+                    - near_penalty * max(0.0, 1.0 - median_depth)
+                )
+                candidate = {
+                    'depth_m': median_depth,
+                    'score': score,
+                    'pixel_count': pixel_count,
+                    'center_distance_norm': center_distance_norm,
+                    'cluster_count': int(end - start),
+                }
+                if best is None or candidate['score'] > best['score']:
+                    best = candidate
+            start = end
+
+        if best is None:
+            return None, None
+        return float(best['depth_m']), best
+
+    def _lookup_depth(self, u: int, v: int, x0: float | None = None, y0: float | None = None, x1: float | None = None, y1: float | None = None):
+        if self.last_depth_msg is None:
+            return None, None
+        depth = self._depth_to_numpy(self.last_depth_msg)
+        mode = str(self.get_parameter('depth_mode').value).strip().lower()
+        if mode == 'bbox_cluster' and None not in (x0, y0, x1, y1):
+            cluster_depth, cluster_debug = self._lookup_depth_bbox_cluster(depth, float(x0), float(y0), float(x1), float(y1))
+            if cluster_depth is not None:
+                return cluster_depth, {'mode': 'bbox_cluster', **cluster_debug}
+        patch_depth = self._lookup_depth_center_patch(depth, u, v)
+        if patch_depth is None:
+            return None, None
+        return patch_depth, {'mode': 'center_patch'}
 
     def _camera_point_from_pixel(self, u: float, v: float, depth_m: float):
         if self.last_camera_info is None:
@@ -189,6 +283,7 @@ class PerceptionNode(Node):
 
         names = []
         object_poses = []
+        depth_debug = []
         if results:
             result = results[0]
             boxes = getattr(result, 'boxes', None)
@@ -207,7 +302,7 @@ class PerceptionNode(Node):
                     x0, y0, x1, y1 = xyxy_list[i]
                     u = int(round((float(x0) + float(x1)) * 0.5))
                     v = int(round((float(y0) + float(y1)) * 0.5))
-                    depth_m = self._lookup_depth(u, v)
+                    depth_m, depth_info = self._lookup_depth(u, v, x0, y0, x1, y1)
                     if depth_m is None:
                         continue
                     point_camera = self._camera_point_from_pixel(float(u), float(v), depth_m)
@@ -225,8 +320,17 @@ class PerceptionNode(Node):
                         'bbox_area_norm': float(max(0.0, (float(x1) - float(x0)) * (float(y1) - float(y0))) / float(msg.width * msg.height)),
                         'bbox_center_x_norm': float(u) / float(msg.width) if msg.width > 0 else 0.5,
                     })
+                    if depth_info is not None:
+                        depth_debug.append({
+                            'class_name': str(label),
+                            'depth_mode': str(depth_info.get('mode', 'unknown')),
+                            'depth_m': float(depth_m),
+                            'pixel_count': int(depth_info.get('pixel_count', 0)),
+                            'score': float(depth_info.get('score', 0.0)),
+                        })
         self.objects = sorted(set(names))
         self.last_object_poses = object_poses
+        self.last_depth_debug = depth_debug
         self.last_yolo_error = None
 
     def publish_state(self):
@@ -245,7 +349,8 @@ class PerceptionNode(Node):
         if self.mode == 'yolo' and self.last_yolo_error:
             debug.data = f'mode=yolo error={self.last_yolo_error} objects={normalized.data}'
         else:
-            debug.data = f'mode={self.mode} objects={normalized.data} poses={len(self.last_object_poses)}'
+            cluster_count = sum(1 for item in self.last_depth_debug if item.get('depth_mode') == 'bbox_cluster')
+            debug.data = f'mode={self.mode} objects={normalized.data} poses={len(self.last_object_poses)} cluster_poses={cluster_count}'
         self.debug_pub.publish(debug)
 
 

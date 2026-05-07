@@ -1,0 +1,30 @@
+real_topics:
+  # Camera inputs
+  rgb_topic: /camera/color/image_raw
+  rgb_camera_info_topic: /camera/color/camera_info
+  depth_topic: /camera/depth/image_rect_raw
+  depth_camera_info_topic: /camera/depth/camera_info
+
+  # Pose inputs
+  robot_pose_topic: /utlidar/robot_pose
+  robot_pose_type: geometry_msgs/msg/PoseStamped
+  robot_pose_frame: odom
+  robot_odom_topic: /utlidar/robot_odom
+  robot_odom_type: nav_msgs/msg/Odometry
+
+  # Control output
+  control_request_topic: /api/sport/request
+  control_request_type: unitree_api/msg/Request
+
+  # Frame candidates: confirm on the real robot before implementation.
+  # Replace placeholders with the actual header.frame_id / TF frames once verified.
+  base_frame: TODO_CONFIRM_BASE_FRAME
+  local_control_frame: camera_link
+  camera_frame: camera_color_optical_frame
+  depth_frame: camera_depth_optical_frame
+
+  # Notes
+  notes:
+    - "1st phase uses /api/sport/request wrapper, not /cmd_vel."
+    - "1st phase local control frame is camera_link because base_link TF is not confirmed yet."
+    - "Confirm sport request command schema before implementing go2_skill_server_real."
