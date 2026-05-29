@@ -42,6 +42,35 @@ llm_yolo/
 | `mission_manager` | mission 실행, 조건 분기, timeout, cancel 처리 |
 | `llm_yolo_interfaces` | 공통 message/action contract |
 
+자연어 명령이 로봇 제어로 전달되는 흐름:
+
+```mermaid
+flowchart TD
+    U["/user_text<br/>자연어 명령"] --> L["llm_command_router_node<br/>Intent / mission_plan 생성"]
+    L --> M["mission_manager_node<br/>mission 상태 관리 및 action 호출"]
+    M --> A{"Action type"}
+
+    A -->|navigate| N["NavigateToPose.action"]
+    A -->|scan / find| SC["ScanScene.action"]
+    A -->|approach| AP["ApproachObject.action"]
+    A -->|cancel / stop| ST["emergency_stop / cancel"]
+
+    N --> B{"Backend"}
+    SC --> B
+    AP --> B
+    ST --> B
+
+    B -->|sim| SS["go2_skill_server_sim"]
+    SS --> SP["perception_node_sim<br/>YOLO / visible objects / object poses"]
+    SS --> SO["/navigate_to_pose 또는 /cmd_vel<br/>Isaac Sim / Nav2"]
+
+    B -->|real| RS["go2_skill_server_real"]
+    RS --> RP["perception_node_real<br/>YOLO11s-seg / object poses"]
+    RS --> CV["/cmd_vel"]
+    CV --> BR["cmd_vel_to_sport_request_node"]
+    BR --> CR["/api/sport/request<br/>Unitree Go2"]
+```
+
 자세한 흐름도는 [docs/overview/architecture.md](docs/overview/architecture.md)를 참고합니다.
 
 ## Common Setup
@@ -96,22 +125,12 @@ Sim 파트는 MVP 기능 구현과 대표 회귀 시나리오 검증이 완료�
 
 완료된 기능:
 
-- named place 이동
-- `scan_scene`
-- 회전 탐색 기반 `find_object`
-- YOLO 기반 객체 탐지
-- YOLO bbox + depth + camera info + TF 기반 object pose 추정
-- `/perception/object_poses` publish
-- `approach_object`
-- `chair 앞으로 가`, `tv 앞으로 가` 검증
-- Nav2 action bridge
-- direct `/cmd_vel` fallback
-- `speed_hint` (`slow`, `normal`, `fast`)
-- `mission_plan` 복합 명령
-- `run_if=always | previous_failed | previous_succeeded` 조건 실행
-- emergency stop / clear
-- `person` 검출 기반 pause/resume 및 거리 조건
-- 대표 회귀 시나리오 실검증
+- 자연어 기반 이동, 탐색, 접근 mission 실행
+- YOLO + depth 기반 객체 인식 및 object pose 추정
+- Nav2 기반 이동과 direct `/cmd_vel` fallback
+- `mission_plan` 기반 복합 명령과 조건 실행
+- emergency stop / clear 및 person 기반 pause/resume
+- 대표 sim 회귀 시나리오 검증
 
 현재 sim 운영 기준:
 
@@ -171,41 +190,16 @@ bash /home/jnu/llm_yolo/scripts/run_monitor_dashboard.sh 127.0.0.1 8765 --no-ope
 ## Sim Command Examples
 
 ```bash
-# Named place 이동
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'center 로 가'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: '천천히 center 로 가'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: '빠르게 center 로 가'}"
-
-# 객체 탐색
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾아'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'tv 찾아'}"
-
-# 객체 접근
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 앞으로 가'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'tv 앞으로 가'}"
-
-# 복합 명령
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'center로 가서 chair 찾아'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾고 없으면 center로 복귀'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾고 없으면 center로 가서 다시 찾아'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'yellow_box 찾고 없으면 red_box 찾아'}"
-
-# 안전 제어
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: '긴급 정지'}"
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: '정지 해제'}"
 ```
 
 대표 검증 명령:
 
 ```text
-center 로 가
-chair 찾아
-chair 찾고 없으면 center로 복귀
-chair 찾고 없으면 center로 가서 다시 찾아
-yellow_box 찾고 없으면 red_box 찾아
-chair 앞으로 가
-긴급 정지
-정지 해제
+접근 미션: chair 앞으로 가
+미션 플랜: chair 찾고 없으면 center로 복귀
+정지: 긴급 정지
+정지 해제: 정지 해제
 ```
 
 ## Sim Monitoring
@@ -257,18 +251,11 @@ Real 파트는 1차 실기체 backend 구현과 일부 end-to-end 경로 1차 �
 
 완료 및 확인된 내용:
 
-- real 전용 perception node 구현
-- real 전용 approach backend 구현
-- onboard watchdog node 연결
+- 실기체용 perception, approach, watchdog, bridge 노드 통합
+- YOLO11s-seg + depth mask cluster 기반 object pose 추정
+- `camera_link` 기준 local approach 구조 구현
 - `/cmd_vel -> /api/sport/request` bridge 구현
-- real launch에 perception, approach, bridge, watchdog 통합
-- 실기체 camera/depth/camera_info topic 확인
-- `/tf_static` 기반 camera frame chain 확인
-- `camera_link` 기준 object pose publish
-- YOLO11s-seg mask 기반 depth cluster 적용
-- `/perception/visible_objects`, `/perception/object_poses`, `/perception/object_markers`, `/perception_debug` publish 경로 구현
-- `chair 앞으로 가` 경로에서 1차 성공 흐름 확인
-- approach 중 `/cmd_vel` 출력 확인
+- `chair 앞으로 가` 경로의 1차 성공 흐름 확인
 - emergency stop 관련 stop/abort 경로 반영
 
 현재 real 운영 기준:
