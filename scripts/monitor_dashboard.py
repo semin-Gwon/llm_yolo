@@ -26,84 +26,200 @@ HTML = """<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SIM MONITOR</title>
+  <title>LLM MONITOR</title>
   <style>
     :root {
-      --bg: #f3f0e8;
-      --panel: #fffaf0;
-      --line: #d8cfbf;
-      --text: #1f1d1a;
-      --muted: #6f6a61;
-      --accent: #b6542d;
-      --ok: #2f7d4d;
-      --warn: #9b6a12;
-      --bad: #a3332f;
-      --shadow: rgba(31, 29, 26, 0.08);
+      --bg: #f6f8fc;
+      --bg-accent: #eef4ff;
+      --panel: rgba(255, 255, 255, 0.94);
+      --panel-strong: #ffffff;
+      --line: #e7ebf3;
+      --line-strong: #d8dfec;
+      --text: #18202f;
+      --muted: #74809a;
+      --accent: #ff7a18;
+      --accent-soft: #fff2e8;
+      --ok: #34b85c;
+      --ok-soft: #ecfbef;
+      --warn: #e5a11b;
+      --warn-soft: #fff7df;
+      --bad: #d84a4a;
+      --bad-soft: #fff0f0;
+      --shadow: 0 24px 60px rgba(24, 32, 47, 0.08);
       --mono: "JetBrains Mono", "Fira Code", monospace;
-      --sans: "Pretendard", "Noto Sans KR", sans-serif;
+      --sans: "Pretendard", "SUIT", "Noto Sans KR", sans-serif;
+      --radius: 24px;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      min-height: 100vh;
       background:
-        radial-gradient(circle at top left, rgba(182,84,45,0.10), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(47,125,77,0.08), transparent 24%),
-        var(--bg);
+        radial-gradient(circle at top left, rgba(90, 145, 255, 0.14), transparent 26%),
+        radial-gradient(circle at top right, rgba(255, 122, 24, 0.10), transparent 20%),
+        linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
       color: var(--text);
       font-family: var(--sans);
     }
-    .wrap {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 24px;
+    .app-shell {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      min-height: 100vh;
     }
-    .topbar {
+    .sidebar {
+      padding: 28px 22px 24px;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(18px);
       display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+    .brand {
+      display: grid;
+      gap: 6px;
+    }
+    .brand-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+    .brand-sub {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+    .nav-item {
+      appearance: none;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      color: #33415c;
+      font-size: 15px;
+      font-weight: 600;
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      text-align: left;
+      transition: 0.18s ease;
+    }
+    .nav-item.active {
+      background: var(--accent-soft);
+      color: #b95b14;
+      border-color: #ffe0c7;
+      box-shadow: inset 0 0 0 1px rgba(255, 122, 24, 0.08);
+    }
+    .nav-item:hover {
+      background: rgba(255, 122, 24, 0.05);
+      border-color: rgba(255, 122, 24, 0.12);
+    }
+    .nav-icon {
+      width: 22px;
+      text-align: center;
+      opacity: 0.9;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      display: grid;
+      gap: 14px;
+    }
+    .system-card {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px 18px;
+      box-shadow: 0 12px 28px rgba(24, 32, 47, 0.05);
+    }
+    .system-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .system-value {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .shell-main {
+      min-width: 0;
+    }
+    .content {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 32px 34px 40px;
+    }
+    .hero {
+      display: flex;
+      align-items: start;
       justify-content: space-between;
-      align-items: end;
-      gap: 16px;
-      margin-bottom: 18px;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+    .hero-copy {
+      min-width: 0;
     }
     h1 {
       margin: 0;
-      font-size: 30px;
-      line-height: 1.05;
+      font-size: 44px;
+      line-height: 1;
       letter-spacing: -0.04em;
     }
     .sub {
       color: var(--muted);
-      margin-top: 6px;
-      font-size: 14px;
+      margin-top: 10px;
+      font-size: 16px;
+      line-height: 1.6;
     }
     .meta {
       display: grid;
-      gap: 6px;
+      gap: 12px;
       justify-items: end;
+      min-width: 360px;
+    }
+    .meta-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      justify-content: end;
+      width: 100%;
+    }
+    .meta-time {
+      display: grid;
+      gap: 8px;
       font-family: var(--mono);
-      font-size: 12px;
+      font-size: 13px;
       color: var(--muted);
+      justify-items: end;
     }
     .grid {
       display: grid;
       grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 16px;
+      gap: 18px;
+      grid-auto-flow: row dense;
+    }
+    .tab-hidden {
+      display: none !important;
     }
     .card {
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px 16px 14px;
-      box-shadow: 0 10px 28px var(--shadow);
-      min-height: 130px;
-    }
-    .hero-card {
-      min-height: 190px;
-    }
-    .compact-card {
-      min-height: 110px;
-    }
-    .table-card {
-      min-height: 220px;
+      border: 1px solid rgba(231, 235, 243, 0.92);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      min-height: 140px;
     }
     .span-3 { grid-column: span 3; }
     .span-2 { grid-column: span 2; }
@@ -113,41 +229,78 @@ HTML = """<!doctype html>
     .span-7 { grid-column: span 7; }
     .span-8 { grid-column: span 8; }
     .span-12 { grid-column: span 12; }
+    .command-card { min-height: 214px; }
+    .metric-card { min-height: 210px; }
+    .table-card { min-height: 268px; }
+    .log-card { min-height: 230px; }
     .label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 18px;
+      letter-spacing: -0.01em;
+    }
+    .label-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #f4f7fc;
+      color: #52627d;
+      font-size: 14px;
+      border: 1px solid var(--line);
+      flex: 0 0 auto;
     }
     .big {
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.03em;
-      line-height: 1.15;
+      line-height: 1.18;
     }
     .status-row {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 2px;
+      flex-wrap: wrap;
     }
     .pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 7px 11px;
       font-size: 12px;
       font-weight: 700;
-      border: 1px solid var(--line);
+      border: 1px solid var(--line-strong);
       background: #fff;
+      color: #41506d;
+      transition: 0.18s ease;
     }
     .dot {
-      width: 9px;
-      height: 9px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: var(--muted);
+    }
+    .ok {
+      background: var(--ok-soft);
+      border-color: #cfeeda;
+      color: var(--ok);
+    }
+    .warn {
+      background: var(--warn-soft);
+      border-color: #f5dd96;
+      color: #9a6b0f;
+    }
+    .bad {
+      background: var(--bad-soft);
+      border-color: #f2c3c3;
+      color: var(--bad);
     }
     .ok .dot { background: var(--ok); }
     .warn .dot { background: var(--warn); }
@@ -192,7 +345,7 @@ HTML = """<!doctype html>
     th, td {
       text-align: left;
       padding: 8px 10px;
-      border-top: 1px solid rgba(216, 207, 191, 0.7);
+      border-top: 1px solid rgba(231, 235, 243, 0.9);
       font-family: var(--mono);
       vertical-align: top;
     }
@@ -209,40 +362,61 @@ HTML = """<!doctype html>
       color: var(--muted);
     }
     .history {
-      max-height: 280px;
+      max-height: 320px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .scroll-pane {
+      max-height: 320px;
       overflow: auto;
       padding-right: 4px;
     }
     .controls {
       display: grid;
-      gap: 14px;
+      gap: 16px;
     }
     .button-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 10px;
+      gap: 12px;
     }
     button {
       appearance: none;
-      border: 1px solid var(--line);
+      border: 1px solid var(--line-strong);
       background: #fff;
       color: var(--text);
-      padding: 10px 14px;
-      border-radius: 12px;
+      padding: 12px 16px;
+      border-radius: 14px;
       font: inherit;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       cursor: pointer;
+      box-shadow: 0 10px 20px rgba(24, 32, 47, 0.04);
+      transition: 0.18s ease;
     }
     button.primary {
       background: var(--accent);
       color: #fff;
       border-color: var(--accent);
+      box-shadow: 0 14px 28px rgba(255, 122, 24, 0.28);
+    }
+    button.active {
+      background: var(--ok);
+      color: #fff;
+      border-color: var(--ok);
+    }
+    button.running {
+      background: var(--ok);
+      color: #fff;
+      border-color: var(--ok);
+      box-shadow: 0 14px 28px rgba(52, 184, 92, 0.24);
     }
     button.warn {
-      background: #fff7e8;
+      background: #fff9ef;
       color: #7a4e0f;
+    }
+    button:hover {
+      transform: translateY(-1px);
     }
     button:disabled {
       opacity: 0.5;
@@ -250,13 +424,14 @@ HTML = """<!doctype html>
     }
     input[type="text"] {
       width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 12px 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 16px;
+      padding: 14px 16px;
       font: inherit;
       font-size: 14px;
       background: #fff;
       color: var(--text);
+      box-shadow: inset 0 1px 2px rgba(24, 32, 47, 0.03);
     }
     .inline-meta {
       display: flex;
@@ -265,63 +440,147 @@ HTML = """<!doctype html>
       margin-top: 12px;
     }
     .hero-input {
-      font-size: 16px !important;
-      padding: 14px 16px !important;
+      font-size: 17px !important;
+      padding: 17px 18px !important;
     }
     .section-note {
       color: var(--muted);
       font-size: 12px;
-      margin-top: 6px;
+      margin-top: 8px;
       letter-spacing: 0.02em;
     }
+    .mission-copy {
+      margin-top: 18px;
+      min-height: 76px;
+    }
+    .metric-copy {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .feedback {
+      min-height: 20px;
+    }
+    .sidebar-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
     @media (max-width: 1100px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .content {
+        padding: 22px 18px 28px;
+      }
+      .hero {
+        align-items: start;
+        flex-direction: column;
+      }
+      .meta {
+        justify-items: start;
+        min-width: 0;
+        width: 100%;
+      }
+      .meta-actions, .meta-time {
+        justify-content: start;
+        justify-items: start;
+      }
       .span-2, .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
-      .topbar { align-items: start; flex-direction: column; }
-      .meta { justify-items: start; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div>
-        <h1>SIM MONITOR</h1>
-        <div class="sub">ROS topic 상태를 백그라운드 구독해서 1초 주기로 갱신합니다.</div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-title">LLM MONITOR</div>
+        <div class="brand-sub">ROS Topic 모니터링 대시보드</div>
       </div>
-      <div class="meta">
-        <div id="serverTime">server_time: -</div>
-        <div id="lastUpdate">last_update: -</div>
+
+      <nav class="nav">
+        <button type="button" class="nav-item dashboardTabBtn active" data-tab="dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></button>
+        <button type="button" class="nav-item dashboardTabBtn" data-tab="command"><span class="nav-icon">⌨</span><span>Command Console</span></button>
+        <button type="button" class="nav-item dashboardTabBtn" data-tab="topics"><span class="nav-icon">☷</span><span>Topics</span></button>
+        <button type="button" class="nav-item dashboardTabBtn" data-tab="logs"><span class="nav-icon">☰</span><span>Logs</span></button>
+        <button type="button" class="nav-item dashboardTabBtn" data-tab="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-card">
+          <div class="system-label">System Status</div>
+          <div class="system-value"><span class="dot" style="background: var(--ok)"></span><span>All Systems Operational</span></div>
+        </div>
+        <div class="sidebar-note">© 2026 LLM Monitor</div>
       </div>
-    </div>
-    <div class="grid">
-      <section class="card span-7 hero-card">
-        <div class="label">Command Console</div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="content">
+        <div class="hero">
+          <div class="hero-copy">
+            <h1 id="pageTitle">Dashboard</h1>
+            <div id="monitorSubtitle" class="sub">ROS topic 상태 및 AI 미션 모니터링</div>
+            <div id="monitorTitle" style="display:none;">LLM MONITOR</div>
+          </div>
+          <div class="meta">
+            <div class="meta-actions">
+              <button id="openRvizBtn">🖥 Open RViz</button>
+              <div class="status-row">
+                <div id="modeAutoPill" class="pill"><span class="dot"></span><span>AUTO</span></div>
+                <div id="modeSimPill" class="pill"><span class="dot"></span><span>SIM</span></div>
+                <div id="modeRealPill" class="pill"><span class="dot"></span><span>REAL</span></div>
+              </div>
+            </div>
+            <div class="meta-time">
+              <div id="serverTime">Server Time&nbsp;&nbsp;&nbsp;&nbsp; -</div>
+              <div id="lastUpdate">Last Update&nbsp;&nbsp; -</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+      <section class="card span-12 command-card dashboardCard" data-tabs="dashboard command">
+        <div class="label"><span class="label-icon">⌲</span><span>Command Console</span></div>
         <div class="controls">
           <input id="userTextInput" class="hero-input" type="text" placeholder="예: chair 앞으로 가" />
           <div class="button-row">
-            <button id="sendUserTextBtn" class="primary">Send Command</button>
-            <button id="cancelMissionBtn" class="warn">Cancel Mission</button>
+            <button id="sendUserTextBtn" class="primary">✈ Send Command</button>
+            <button id="cancelMissionBtn" class="warn">✕ Cancel Mission</button>
             <button class="quickCmd" data-command="center 로 가">center 로 가</button>
             <button class="quickCmd" data-command="chair 찾아">chair 찾아</button>
             <button class="quickCmd" data-command="chair 앞으로 가">chair 앞으로 가</button>
             <button class="quickCmd" data-command="긴급 정지">긴급 정지</button>
             <button class="quickCmd" data-command="정지 해제">정지 해제</button>
           </div>
-          <div id="commandFeedback" class="mono muted">-</div>
+          <div id="commandFeedback" class="mono muted feedback">-</div>
         </div>
       </section>
 
-      <section class="card span-3 compact-card">
-        <div class="label">Mission</div>
+      <section class="card span-4 metric-card dashboardCard" data-tabs="dashboard command">
+        <div class="label"><span class="label-icon">⚑</span><span>Mission Status</span></div>
         <div class="status-row">
           <div id="missionPill" class="pill warn"><span class="dot"></span><span id="missionStatus">unknown</span></div>
           <div id="executionPill" class="pill warn"><span class="dot"></span><span id="executionStatus">idle</span></div>
         </div>
-        <div id="missionText" class="big" style="margin-top:14px;">-</div>
+        <div id="missionText" class="big mission-copy">-</div>
       </section>
 
-      <section class="card span-2 compact-card">
-        <div class="label">Safety</div>
+      <section class="card span-4 metric-card dashboardCard" data-tabs="dashboard command">
+        <div class="label"><span class="label-icon">◎</span><span>Target Distance</span></div>
+        <div id="targetDistanceValue" class="big">-</div>
+        <div class="metric-copy">
+          <div id="targetDistanceMeta" class="sub">-</div>
+        </div>
+        <div id="targetDistanceHint" class="section-note">-</div>
+      </section>
+
+      <section class="card span-4 metric-card dashboardCard" data-tabs="dashboard command settings">
+        <div class="label"><span class="label-icon">🛡</span><span>Safety Status</span></div>
         <div class="status-row">
           <div id="emergencyPill" class="pill ok"><span class="dot"></span><span id="emergencyStatus">clear</span></div>
         </div>
@@ -332,33 +591,16 @@ HTML = """<!doctype html>
         <div id="personPauseText" class="sub" style="margin-top:10px;">-</div>
       </section>
 
-      <section class="card span-4 compact-card">
-        <div class="label">Target Distance</div>
-        <div id="targetDistanceValue" class="big">-</div>
-        <div id="targetDistanceMeta" class="sub" style="margin-top:10px;">-</div>
-      </section>
-
-      <section class="card span-4 compact-card">
-        <div class="label">Objects</div>
+      <section class="card span-4 table-card dashboardCard" data-tabs="dashboard">
+        <div class="label"><span class="label-icon">⬡</span><span>Detected Objects</span></div>
         <div id="visibleObjects" class="big">-</div>
         <div class="inline-meta">
           <div id="poseCount" class="pill"><span class="dot"></span><span>poses: 0</span></div>
         </div>
       </section>
 
-      <section class="card span-4 compact-card">
-        <div class="label">Intent</div>
-        <div id="intentText" class="big">-</div>
-        <div id="intentMeta" class="sub" style="margin-top:10px;">-</div>
-      </section>
-
-      <section class="card span-12 compact-card">
-        <div class="label">Recent Mission State</div>
-        <div id="missionHistory" class="history mono muted">-</div>
-      </section>
-
-      <section class="card span-8 table-card">
-        <div class="label">Object Poses</div>
+      <section class="card span-8 table-card dashboardCard" data-tabs="dashboard">
+        <div class="label"><span class="label-icon">⌘</span><span>Object Poses (Live)</span></div>
         <div class="section-note">현재 perception이 보고 있는 live object 목록</div>
         <table>
           <thead>
@@ -370,8 +612,23 @@ HTML = """<!doctype html>
         </table>
       </section>
 
-      <section class="card span-4 table-card">
-        <div class="label">Action Health</div>
+      <section class="card span-4 log-card dashboardCard" data-tabs="dashboard logs">
+        <div class="label"><span class="label-icon">🛡</span><span>Perception Debug</span></div>
+        <div id="perceptionDebug" class="mono">-</div>
+      </section>
+
+      <section class="card span-4 log-card dashboardCard" data-tabs="dashboard logs">
+        <div class="label"><span class="label-icon">◎</span><span>Approach Control</span></div>
+        <div id="approachDebug" class="mono">-</div>
+      </section>
+
+      <section class="card span-4 log-card dashboardCard" data-tabs="dashboard logs settings">
+        <div class="label"><span class="label-icon">✎</span><span>Mission Plan</span></div>
+        <div id="missionPlan" class="mono">-</div>
+      </section>
+
+      <section class="card span-4 log-card dashboardCard" data-tabs="dashboard settings">
+        <div class="label"><span class="label-icon">⚙</span><span>Action Health</span></div>
         <table>
           <thead>
             <tr><th>Action</th><th>Servers</th><th>Clients</th><th>Status</th></tr>
@@ -382,21 +639,23 @@ HTML = """<!doctype html>
         </table>
       </section>
 
-      <section class="card span-6">
-        <div class="label">Perception Debug</div>
-        <div id="perceptionDebug" class="mono">-</div>
+      <section class="card span-6 log-card dashboardCard" data-tabs="topics">
+        <div class="label"><span class="label-icon">☷</span><span>ROS Topic List</span></div>
+        <div id="topicList" class="mono scroll-pane muted">-</div>
       </section>
 
-      <section class="card span-6">
-        <div class="label">Mission Plan</div>
-        <div id="missionPlan" class="mono">-</div>
+      <section class="card span-6 log-card dashboardCard" data-tabs="topics">
+        <div class="label"><span class="label-icon">⌘</span><span>ROS Node List</span></div>
+        <div id="nodeList" class="mono scroll-pane muted">-</div>
       </section>
 
-      <section class="card span-12">
-        <div class="label">Core Logs</div>
+      <section class="card span-12 log-card dashboardCard" data-tabs="dashboard logs">
+        <div class="label"><span class="label-icon">☰</span><span>Core Logs</span></div>
         <div id="coreLogs" class="history mono muted">-</div>
       </section>
-    </div>
+        </div>
+      </div>
+    </main>
   </div>
 
   <script>
@@ -411,6 +670,28 @@ HTML = """<!doctype html>
       element.classList.remove("ok", "warn", "bad");
       element.classList.add(status);
       element.querySelector("span:last-child").textContent = text;
+    }
+
+    function setActiveTab(tabName) {
+      const titles = {
+        dashboard: "Dashboard",
+        command: "Command Console",
+        topics: "Topics",
+        logs: "Logs",
+        settings: "Settings",
+      };
+      document.querySelectorAll(".dashboardTabBtn").forEach((button) => {
+        button.classList.toggle("active", button.dataset.tab === tabName);
+      });
+      document.querySelectorAll(".dashboardCard").forEach((card) => {
+        const allowedTabs = String(card.dataset.tabs || "").split(/\s+/).filter(Boolean);
+        card.classList.toggle("tab-hidden", !allowedTabs.includes(tabName));
+      });
+      const pageTitle = document.getElementById("pageTitle");
+      if (pageTitle) pageTitle.textContent = titles[tabName] || "Dashboard";
+      try {
+        window.localStorage.setItem("llm_monitor_tab", tabName);
+      } catch (_) {}
     }
 
     function missionStatusFromText(text) {
@@ -486,6 +767,26 @@ HTML = """<!doctype html>
         const response = await fetch("/api/state", { cache: "no-store" });
         const state = await response.json();
 
+        const monitor = state.monitor || {};
+        const effectiveMode = monitor.selected_mode || monitor.mode || "auto";
+        const titleByMode = {
+          auto: "LLM MONITOR",
+          sim: "SIM MONITOR",
+          real: "REAL MONITOR",
+        };
+        const subtitleByMode = {
+          auto: "ROS topic 상태를 백그라운드 구독해서 1초 주기로 갱신합니다.",
+          sim: "sim 토픽과 TF 기준으로 상태를 갱신합니다.",
+          real: "real 토픽과 camera_link 기준 pose를 포함해 상태를 갱신합니다.",
+        };
+        document.getElementById("monitorTitle").textContent = titleByMode[effectiveMode] || "LLM MONITOR";
+        document.getElementById("monitorSubtitle").textContent =
+          subtitleByMode[effectiveMode] || subtitleByMode.auto;
+
+        setStatusPill(document.getElementById("modeAutoPill"), effectiveMode === "auto" ? "ok" : "warn", "AUTO");
+        setStatusPill(document.getElementById("modeSimPill"), effectiveMode === "sim" ? "ok" : "warn", "SIM");
+        setStatusPill(document.getElementById("modeRealPill"), effectiveMode === "real" ? "ok" : "warn", "REAL");
+
         const missionText = state.mission_state.last || "-";
         const [missionClass, missionLabel] = missionStatusFromText(missionText);
         setStatusPill(document.getElementById("missionPill"), missionClass, missionLabel);
@@ -498,18 +799,20 @@ HTML = """<!doctype html>
         );
 
         const emergencyActive = Boolean(state.emergency_stop.active);
+        const emergencyLabel = emergencyActive ? "EMERGENCY STOP ACTIVE" : "EMERGENCY CLEARED";
+        const emergencyPillLabel = emergencyActive ? "stop active" : "stop cleared";
         setStatusPill(
           document.getElementById("emergencyPill"),
           emergencyActive ? "bad" : "ok",
-          emergencyActive ? "engaged" : "clear"
+          emergencyPillLabel
         );
-        document.getElementById("emergencyText").textContent = emergencyActive ? "engaged" : "clear";
+        document.getElementById("emergencyText").textContent = emergencyLabel;
 
         const personPause = state.person_pause || {};
         setStatusPill(
           document.getElementById("personPausePill"),
           personPause.active ? "warn" : "ok",
-          personPause.active ? "person pause" : "person clear"
+          personPause.active ? "person pause active" : "person path clear"
         );
         document.getElementById("personPauseText").textContent = personPause.message || "-";
 
@@ -519,19 +822,15 @@ HTML = """<!doctype html>
         const robotPose = state.robot_pose || {};
         const objectPoseState = state.object_poses || {};
         const lockedTarget = state.locked_target || {};
+        const intent = state.intent || {};
         const poseObjects = computeObjectDistances(objectPoseState.objects || [], robotPose, objectPoseState.frame_id || "");
         document.getElementById("poseCount").textContent = `poses: ${poseObjects.length}`;
         updatePoseTable(poseObjects, lockedTarget);
 
-        const intent = state.intent || {};
-        document.getElementById("intentText").textContent = intent.intent || "-";
-        document.getElementById("intentMeta").textContent =
-          intent.intent ? `${intent.target_type || "-"}:${intent.target_value || "-"} / speed=${intent.speed_hint || "-"}` : "-";
-
         document.getElementById("perceptionDebug").textContent = state.perception_debug.last || "-";
+        const approachDebug = state.approach_debug || {};
+        document.getElementById("approachDebug").textContent = approachDebug.pretty || approachDebug.last || "-";
         document.getElementById("missionPlan").textContent = state.mission_plan.pretty || state.mission_plan.last || "-";
-        document.getElementById("missionHistory").innerHTML =
-          (state.mission_state.history || []).map((line) => escapeHtml(line)).join("<br>") || "-";
         document.getElementById("coreLogs").innerHTML =
           (state.core_logs || []).map((line) => escapeHtml(line)).join("<br>") || "-";
         if (lockedTarget.active) {
@@ -550,6 +849,12 @@ HTML = """<!doctype html>
           document.getElementById("targetDistanceValue").textContent = "-";
           document.getElementById("targetDistanceMeta").textContent = lockedTarget.message || "target lock unavailable";
         }
+        document.getElementById("targetDistanceHint").textContent =
+          robotPose.available
+            ? `robot pose source: ${robotPose.frame_id || "-"}`
+            : (state.object_poses.frame_id === "camera_link"
+                ? "camera_link 기준 상대 pose만 수신 중"
+                : "robot pose unavailable");
         const actions = state.actions || {};
         const actionRows = Object.entries(actions);
         document.getElementById("actionHealthBody").innerHTML = actionRows.length
@@ -562,6 +867,23 @@ HTML = """<!doctype html>
               </tr>
             `).join("")
           : '<tr><td colspan="4" class="muted">no data</td></tr>';
+
+        const topicItems = ((state.topic_list || {}).items || []);
+        const nodeItems = ((state.node_list || {}).items || []);
+        document.getElementById("topicList").innerHTML = topicItems.length
+          ? topicItems.map((line) => escapeHtml(line)).join("<br>")
+          : "-";
+        document.getElementById("nodeList").innerHTML = nodeItems.length
+          ? nodeItems.map((line) => escapeHtml(line)).join("<br>")
+          : "-";
+
+        const rviz = state.rviz || {};
+        const rvizButton = document.getElementById("openRvizBtn");
+        if (rvizButton) {
+          rvizButton.classList.toggle("running", Boolean(rviz.running));
+          rvizButton.textContent = rviz.running ? "🖥 RViz Running" : "🖥 Open RViz";
+          rvizButton.disabled = Boolean(rviz.running);
+        }
 
         document.getElementById("serverTime").textContent = `server_time: ${state.server_time}`;
         document.getElementById("lastUpdate").textContent = `last_update: ${state.last_update || "-"}`;
@@ -613,6 +935,51 @@ HTML = """<!doctype html>
       }
     });
 
+    document.getElementById("openRvizBtn").addEventListener("click", async () => {
+      const button = document.getElementById("openRvizBtn");
+      try {
+        button.disabled = true;
+        button.textContent = "🖥 Starting RViz";
+        await postJson("/api/open_rviz", {});
+        refresh();
+      } catch (err) {
+        button.classList.remove("running");
+        button.disabled = false;
+        button.textContent = "RViz Failed";
+        window.setTimeout(() => {
+          button.textContent = "🖥 Open RViz";
+        }, 3000);
+      }
+    });
+
+    document.getElementById("modeAutoPill").addEventListener("click", async () => {
+      await postJson("/api/mode", { mode: "auto" });
+      refresh();
+    });
+    document.getElementById("modeSimPill").addEventListener("click", async () => {
+      await postJson("/api/mode", { mode: "sim" });
+      refresh();
+    });
+    document.getElementById("modeRealPill").addEventListener("click", async () => {
+      await postJson("/api/mode", { mode: "real" });
+      refresh();
+    });
+
+    document.querySelectorAll(".dashboardTabBtn").forEach((button) => {
+      button.addEventListener("click", () => {
+        setActiveTab(button.dataset.tab || "dashboard");
+      });
+    });
+
+    const savedTab = (() => {
+      try {
+        return window.localStorage.getItem("llm_monitor_tab") || "dashboard";
+      } catch (_) {
+        return "dashboard";
+      }
+    })();
+    setActiveTab(savedTab);
+
     refresh();
     setInterval(refresh, 1000);
   </script>
@@ -622,15 +989,22 @@ HTML = """<!doctype html>
 
 
 class SharedState:
-    def __init__(self):
+    def __init__(self, initial_mode: str = 'auto'):
         self._lock = threading.Lock()
+        mode = initial_mode if initial_mode in {'auto', 'sim', 'real'} else 'auto'
+        self._perception_hold_sec = 3.0
         self._state: dict[str, Any] = {
+            'monitor': {
+                'mode': mode,
+                'selected_mode': mode,
+            },
             'server_time': '',
             'last_update': '',
             'mission_state': {'last': '', 'history': []},
             'perception_debug': {'last': ''},
-            'object_poses': {'frame_id': '', 'objects': []},
-            'visible_objects': {'raw': '', 'items': []},
+            'approach_debug': {'last': '', 'pretty': ''},
+            'object_poses': {'frame_id': '', 'objects': [], 'raw': '', 'last_nonempty_time': 0.0},
+            'visible_objects': {'raw': '', 'items': [], 'last_nonempty_time': 0.0},
             'emergency_stop': {'active': False, 'last': ''},
             'mission_plan': {'last': '', 'pretty': ''},
             'intent': {
@@ -650,6 +1024,17 @@ class SharedState:
             },
             'core_logs': [],
             'actions': {},
+            'topic_list': {
+                'items': [],
+            },
+            'node_list': {
+                'items': [],
+            },
+            'rviz': {
+                'running': False,
+                'pid': None,
+                'message': 'not started',
+            },
             'cmd_vel': {
                 'linear_x': 0.0,
                 'angular_z': 0.0,
@@ -710,10 +1095,71 @@ class SharedState:
             self._state['perception_debug']['last'] = text
             self._touch()
 
-    def update_visible_objects(self, text: str):
-        items = [item.strip() for item in text.split(',') if item.strip()]
+    def update_approach_debug(self, text: str):
+        pretty = text
+        try:
+            payload = json.loads(text) if text else {}
+            display = {
+                'source': payload.get('control_source', '-'),
+                'distance_m': round(float(payload['distance_m']), 3) if 'distance_m' in payload else None,
+                'error_m': round(float(payload['distance_error_m']), 3) if 'distance_error_m' in payload else None,
+                'stop_at_m': round(float(payload['approach_distance_m']), 3) if 'approach_distance_m' in payload else None,
+                'target_x_m': round(float(payload['target_x_m']), 3) if 'target_x_m' in payload else None,
+                'target_y_m': round(float(payload['target_y_m']), 3) if 'target_y_m' in payload else None,
+                'heading_rad': round(float(payload['heading_rad']), 3) if 'heading_rad' in payload else None,
+                'cmd_linear': round(float(payload['commanded_linear_mps']), 3) if 'commanded_linear_mps' in payload else None,
+                'cmd_yaw': round(float(payload['commanded_yaw_radps']), 3) if 'commanded_yaw_radps' in payload else None,
+                'odom_ok': bool(payload.get('odom_available', False)),
+                'odom_target': bool(payload.get('odom_target_active', False)),
+                'outcome': payload.get('outcome', ''),
+            }
+            pretty = '\n'.join(f'{key}: {value}' for key, value in display.items() if value not in (None, ''))
+        except Exception:
+            pass
         with self._lock:
-            self._state['visible_objects'] = {'raw': text, 'items': items}
+            self._state['approach_debug'] = {'last': text, 'pretty': pretty}
+            self._touch()
+
+    def update_visible_objects(self, text: str):
+        items: list[str] = []
+        try:
+            payload = json.loads(text) if text else {}
+        except Exception:
+            payload = None
+
+        if isinstance(payload, dict):
+            raw_objects = payload.get('objects', [])
+            if isinstance(raw_objects, list):
+                for item in raw_objects:
+                    if isinstance(item, dict):
+                        label = str(item.get('class_name', '')).strip()
+                        if label:
+                            items.append(label)
+                    else:
+                        label = str(item).strip()
+                        if label:
+                            items.append(label)
+        elif isinstance(payload, list):
+            items = [str(item).strip() for item in payload if str(item).strip()]
+
+        if not items:
+            normalized = text.replace('\n', ',')
+            items = [item.strip() for item in normalized.split(',') if item.strip()]
+
+        with self._lock:
+            previous = self._state.get('visible_objects', {})
+            last_nonempty_time = float(previous.get('last_nonempty_time', 0.0) or 0.0)
+            now = time.time()
+            if items:
+                last_nonempty_time = now
+            elif previous.get('items') and (now - last_nonempty_time) <= self._perception_hold_sec:
+                items = list(previous.get('items', []))
+
+            self._state['visible_objects'] = {
+                'raw': text,
+                'items': items,
+                'last_nonempty_time': last_nonempty_time,
+            }
             self._recompute_person_pause_locked()
             self._touch()
 
@@ -725,20 +1171,74 @@ class SharedState:
             }
             self._touch()
 
+    def update_emergency_clear(self, active: bool):
+        if not active:
+            return
+        self.update_emergency_stop(False)
+
     def update_object_poses(self, text: str):
         payload: dict[str, Any]
         try:
             payload = json.loads(text) if text else {}
         except Exception:
             payload = {'raw': text, 'objects': []}
+        raw_objects = payload.get('objects', [])
+        objects = raw_objects if isinstance(raw_objects, list) else []
+        frame_id = str(payload.get('frame_id', ''))
         with self._lock:
+            previous = self._state.get('object_poses', {})
+            last_nonempty_time = float(previous.get('last_nonempty_time', 0.0) or 0.0)
+            now = time.time()
+            if objects:
+                last_nonempty_time = now
+            elif previous.get('objects') and (now - last_nonempty_time) <= self._perception_hold_sec:
+                objects = list(previous.get('objects', []))
+                if not frame_id:
+                    frame_id = str(previous.get('frame_id', ''))
+
             self._state['object_poses'] = {
-                'frame_id': str(payload.get('frame_id', '')),
-                'objects': payload.get('objects', []),
+                'frame_id': frame_id,
+                'objects': objects,
+                'raw': text,
+                'last_nonempty_time': last_nonempty_time,
             }
+            self._apply_real_pose_fallback_locked(frame_id)
             self._try_lock_target_locked()
             self._update_locked_target_distance_locked()
             self._touch()
+
+    def update_monitor_mode(self, mode: str):
+        normalized = str(mode).strip().lower()
+        if normalized not in {'auto', 'sim', 'real'}:
+            return
+        with self._lock:
+            self._state['monitor']['selected_mode'] = normalized
+            self._apply_real_pose_fallback_locked(
+                str(self._state.get('object_poses', {}).get('frame_id', ''))
+            )
+            self._try_lock_target_locked()
+            self._update_locked_target_distance_locked()
+            self._touch()
+
+    def _effective_mode_locked(self) -> str:
+        return str(self._state.get('monitor', {}).get('selected_mode', 'auto')).strip().lower() or 'auto'
+
+    def _apply_real_pose_fallback_locked(self, object_frame: str):
+        effective_mode = self._effective_mode_locked()
+        robot_pose = self._state.get('robot_pose', {})
+        if effective_mode not in {'auto', 'real'}:
+            return
+        if robot_pose.get('available'):
+            return
+        if object_frame != 'camera_link':
+            return
+        self._state['robot_pose'] = {
+            'available': True,
+            'frame_id': 'camera_link',
+            'x': 0.0,
+            'y': 0.0,
+            'z': 0.0,
+        }
 
     def update_mission_plan(self, text: str):
         pretty = text
@@ -793,6 +1293,25 @@ class SharedState:
             self._state['actions'] = actions
             self._touch()
 
+    def update_topic_list(self, items: list[str]):
+        with self._lock:
+            self._state['topic_list'] = {'items': list(items)}
+            self._touch()
+
+    def update_node_list(self, items: list[str]):
+        with self._lock:
+            self._state['node_list'] = {'items': list(items)}
+            self._touch()
+
+    def update_rviz(self, running: bool, pid: int | None = None, message: str = ''):
+        with self._lock:
+            self._state['rviz'] = {
+                'running': bool(running),
+                'pid': int(pid) if pid is not None else None,
+                'message': message or ('running' if running else 'not running'),
+            }
+            self._touch()
+
     def update_cmd_vel(self, linear_x: float, angular_z: float):
         with self._lock:
             self._state['cmd_vel'] = {
@@ -818,6 +1337,10 @@ class SharedState:
                 'y': float(y),
                 'z': float(z),
             }
+            if not available:
+                self._apply_real_pose_fallback_locked(
+                    str(self._state.get('object_poses', {}).get('frame_id', ''))
+                )
             self._try_lock_target_locked()
             self._update_locked_target_distance_locked()
             self._touch()
@@ -836,10 +1359,6 @@ class SharedState:
         }
 
     def _try_lock_target_locked(self):
-        locked = self._state.get('locked_target', {})
-        if locked.get('active'):
-            return
-
         target_class = self._get_current_approach_target_locked()
         object_poses = self._state.get('object_poses', {})
         robot_pose = self._state.get('robot_pose', {})
@@ -1033,31 +1552,77 @@ class ActionInspector:
         return {'servers': servers, 'clients': clients, 'status': status}
 
 
-class MonitorNode(Node):
+class RosGraphInspector:
     def __init__(self, shared: SharedState):
+        self.shared = shared
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self.thread.start()
+
+    def stop(self):
+        self.stop_event.set()
+        self.thread.join(timeout=1.0)
+
+    def _run(self):
+        while not self.stop_event.is_set():
+            self.shared.update_topic_list(self._collect_list('ros2 topic list'))
+            self.shared.update_node_list(self._collect_list('ros2 node list'))
+            self.stop_event.wait(3.0)
+
+    def _collect_list(self, command: str) -> list[str]:
+        try:
+            result = subprocess.run(
+                ['/bin/bash', '-lc', command],
+                capture_output=True,
+                text=True,
+                timeout=4.0,
+                env=os.environ.copy(),
+            )
+        except Exception as exc:
+            return [f'error: {exc}']
+
+        output = (result.stdout or '').strip()
+        if result.returncode != 0:
+            stderr = (result.stderr or '').strip()
+            return [line for line in [output, stderr] if line] or ['unavailable']
+        return [line for line in output.splitlines() if line.strip()]
+
+
+class MonitorNode(Node):
+    def __init__(self, shared: SharedState, monitor_mode: str = 'auto'):
         super().__init__('monitor_dashboard_node')
         self.shared = shared
+        self.monitor_mode = monitor_mode if monitor_mode in {'auto', 'sim', 'real'} else 'auto'
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.user_text_pub = self.create_publisher(String, '/user_text', 10)
         self.intent_pub = self.create_publisher(Intent, '/intent', 10)
         self.create_subscription(String, '/mission_state', self.on_mission_state, 10)
         self.create_subscription(String, '/perception_debug', self.on_perception_debug, 10)
+        self.create_subscription(String, '/approach_object/debug', self.on_approach_debug, 10)
         self.create_subscription(String, '/perception/visible_objects', self.on_visible_objects, 10)
         self.create_subscription(String, '/perception/object_poses', self.on_object_poses, 10)
         self.create_subscription(String, '/mission_plan', self.on_mission_plan, 10)
         self.create_subscription(Bool, '/emergency_stop', self.on_emergency_stop, 10)
+        self.create_subscription(Bool, '/emergency_clear', self.on_emergency_clear, 10)
         self.create_subscription(Intent, '/intent', self.on_intent, 10)
         self.create_subscription(Log, '/rosout', self.on_rosout, 100)
         self.create_subscription(Twist, '/cmd_vel', self.on_cmd_vel, 20)
         self.create_subscription(Odometry, '/odom', self.on_odom, 20)
         self.create_timer(0.5, self.update_robot_pose_from_tf)
+        self.rviz_process: subprocess.Popen | None = None
+        self.create_timer(1.0, self.update_rviz_status)
 
     def on_mission_state(self, msg: String):
         self.shared.update_mission_state(msg.data)
 
     def on_perception_debug(self, msg: String):
         self.shared.update_perception_debug(msg.data)
+
+    def on_approach_debug(self, msg: String):
+        self.shared.update_approach_debug(msg.data)
 
     def on_visible_objects(self, msg: String):
         self.shared.update_visible_objects(msg.data)
@@ -1070,6 +1635,9 @@ class MonitorNode(Node):
 
     def on_emergency_stop(self, msg: Bool):
         self.shared.update_emergency_stop(bool(msg.data))
+
+    def on_emergency_clear(self, msg: Bool):
+        self.shared.update_emergency_clear(bool(msg.data))
 
     def on_intent(self, msg: Intent):
         self.shared.update_intent(msg)
@@ -1090,6 +1658,34 @@ class MonitorNode(Node):
         msg.object_selector = ''
         msg.approach_distance_m = 0.0
         self.intent_pub.publish(msg)
+
+    def launch_rviz(self):
+        self.update_rviz_status()
+        if self.rviz_process is not None and self.rviz_process.poll() is None:
+            self.shared.update_rviz(True, self.rviz_process.pid, 'already running')
+            return
+        env = os.environ.copy()
+        env.setdefault('DISPLAY', os.environ.get('DISPLAY', ':0'))
+        config_path = '/home/jnu/llm_yolo/rviz/real_perception.rviz'
+        self.rviz_process = subprocess.Popen(
+            ['rviz2', '-d', config_path],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        self.shared.update_rviz(True, self.rviz_process.pid, 'running')
+
+    def update_rviz_status(self):
+        if self.rviz_process is None:
+            self.shared.update_rviz(False, None, 'not started')
+            return
+        returncode = self.rviz_process.poll()
+        if returncode is None:
+            self.shared.update_rviz(True, self.rviz_process.pid, 'running')
+            return
+        self.shared.update_rviz(False, None, f'exited: {returncode}')
+        self.rviz_process = None
 
     def on_rosout(self, msg: Log):
         if msg.name not in {'llm_command_router_node', 'mission_manager_node', 'navigate_to_pose_server', 'approach_object_server'}:
@@ -1112,12 +1708,27 @@ class MonitorNode(Node):
         self.shared.update_odom(msg.twist.twist.linear.x, msg.twist.twist.angular.z)
 
     def update_robot_pose_from_tf(self):
-        try:
-            transform = self.tf_buffer.lookup_transform('map', 'base_link', Time())
-            translation = transform.transform.translation
-            self.shared.update_robot_pose(True, 'map', translation.x, translation.y, translation.z)
-        except TransformException:
-            self.shared.update_robot_pose(False, '', 0.0, 0.0, 0.0)
+        frame_candidates: list[tuple[str, str]] = []
+        if self.monitor_mode in {'auto', 'sim'}:
+            frame_candidates.extend([
+                ('map', 'base_link'),
+                ('odom', 'base_link'),
+            ])
+        if self.monitor_mode in {'auto', 'real'}:
+            frame_candidates.extend([
+                ('odom', 'base_link'),
+                ('odom', 'camera_link'),
+            ])
+
+        for target_frame, source_frame in frame_candidates:
+            try:
+                transform = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
+                translation = transform.transform.translation
+                self.shared.update_robot_pose(True, target_frame, translation.x, translation.y, translation.z)
+                return
+            except TransformException:
+                continue
+        self.shared.update_robot_pose(False, '', 0.0, 0.0, 0.0)
 
 
 def make_handler(shared: SharedState, node: MonitorNode):
@@ -1163,6 +1774,20 @@ def make_handler(shared: SharedState, node: MonitorNode):
                 node.publish_cancel_intent()
                 return self._send_json(200, {'ok': True, 'message': 'published cancel intent'})
 
+            if parsed.path == '/api/open_rviz':
+                try:
+                    node.launch_rviz()
+                except Exception as exc:
+                    return self._send_json(500, {'ok': False, 'message': f'failed to launch rviz: {exc}'})
+                return self._send_json(200, {'ok': True, 'message': 'launched rviz2'})
+
+            if parsed.path == '/api/mode':
+                mode = str(payload.get('mode', '')).strip().lower()
+                if mode not in {'auto', 'sim', 'real'}:
+                    return self._send_json(400, {'ok': False, 'message': f'invalid mode: {mode}'})
+                shared.update_monitor_mode(mode)
+                return self._send_json(200, {'ok': True, 'message': f'monitor mode set: {mode}'})
+
             self.send_error(404)
 
         def log_message(self, fmt: str, *args: Any):
@@ -1185,16 +1810,19 @@ def main():
     parser = argparse.ArgumentParser(description='llm_yolo web monitor dashboard')
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--mode', choices=['auto', 'sim', 'real'], default='auto')
     args = parser.parse_args()
 
-    shared = SharedState()
+    shared = SharedState(initial_mode=args.mode)
 
     rclpy.init()
-    node = MonitorNode(shared)
+    node = MonitorNode(shared, monitor_mode=args.mode)
     action_inspector = ActionInspector(shared)
+    ros_graph_inspector = RosGraphInspector(shared)
     ros_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     ros_thread.start()
     action_inspector.start()
+    ros_graph_inspector.start()
 
     server = ThreadingHTTPServer((args.host, args.port), make_handler(shared, node))
     print(f'llm_yolo dashboard listening on http://{args.host}:{args.port}', flush=True)
@@ -1205,6 +1833,7 @@ def main():
     finally:
         server.shutdown()
         action_inspector.stop()
+        ros_graph_inspector.stop()
         node.destroy_node()
         rclpy.shutdown()
         ros_thread.join(timeout=1.0)

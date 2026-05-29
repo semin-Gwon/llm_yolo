@@ -1,15 +1,34 @@
 approach_object_server:
   ros__parameters:
     object_pose_topic: /perception/object_poses
+    command_output_mode: cmd_vel
     control_request_topic: /api/sport/request
+    cmd_vel_topic: /cmd_vel
     object_pose_frame: camera_link
-    default_approach_distance_m: 0.5
+    default_approach_distance_m: 1.0
+    min_approach_distance_m: 1.0
+    max_approach_distance_m: 1.0
     heading_align_threshold_rad: 0.25
     heading_stop_threshold_rad: 0.6
     max_linear_speed_mps: 0.3
+    min_linear_speed_mps: 0.22
     max_angular_speed_radps: 0.4
+    near_distance_slowdown_m: 1.0
+    near_max_linear_speed_mps: 0.18
+    near_yaw_deadband_rad: 0.18
+    lateral_deadband_m: 0.18
     linear_gain: 0.6
     angular_gain: 1.2
     control_period_sec: 0.1
-    stale_pose_timeout_sec: 1.0
+    stale_pose_timeout_sec: 2.5
+    target_hold_timeout_sec: 1.5
+    lost_target_arrival_margin_m: 0.25
+    min_tracking_confidence: 0.20
+    lock_reacquire_radius_m: 0.75
+    min_initial_lock_distance_m: 0.35
+    use_odom_target_lock: false
+    robot_odom_topic: /utlidar/robot_odom
+    odom_stale_timeout_sec: 0.5
+    odom_target_update_radius_m: 0.75
+    odom_target_refresh_while_visible: false
     send_balance_stand_on_start: true

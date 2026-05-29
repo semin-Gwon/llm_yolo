@@ -22,6 +22,7 @@ setup(
             'navigate_to_pose_server = go2_skill_server_real.navigate_to_pose_server:main',
             'rotate_in_place_server = go2_skill_server_real.rotate_in_place_server:main',
             'scan_scene_server = go2_skill_server_real.scan_scene_server:main',
+            'cmd_vel_to_sport_request_node = go2_skill_server_real.cmd_vel_to_sport_request_node:main',
         ],
     },
 )

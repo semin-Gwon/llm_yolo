@@ -1,93 +1,136 @@
 # llm_yolo
 
-> **Unitree Go2 Edu**를 위한 **Sim-First Agentic VLA 파이프라인** (ROS 2 Humble + Isaac Sim 5.1.0)  
-> 자연어 명령 → LLM/Rule-Based 파싱 → Mission 실행 → YOLO 기반 Perception → Nav2 주행
+Unitree Go2 Edu를 대상으로 한 ROS 2 Humble 기반 연구 프로젝트입니다.
 
----
+목표는 자연어 명령을 구조화된 mission으로 변환하고, YOLO 기반 perception과 sim/real backend를 통해 로봇 행동으로 연결하는 것입니다. 현재 구조는 **sim-first**로 개발되었고, 상위 mission 계층은 공통으로 유지한 채 `backends/sim`과 `backends/real`만 교체하는 방식입니다.
 
-## 🗺️ 시스템 개요
-
-```
-[자연어 입력] → llm_command_router → mission_manager → go2_skill_server_sim
-                  (Rule-Based / LLM)       (Mission 흐름)    (Navigate / Scan / Approach)
-                                                               ↕
-                                                    perception_node_sim
-                                                  (YOLO / Ground-Truth)
+```text
+user text
+  -> llm_command_router
+  -> mission_manager
+  -> llm_yolo_interfaces actions
+  -> sim backend 또는 real backend
 ```
 
-| 구성 요소 | 역할 |
+## Project Status
+
+이 README는 현재까지 구현 및 확인된 내용만 기록합니다.
+
+| 영역 | 현재 상태 |
 |---|---|
-| `llm_command_router` | `/user_text` 자연어를 Intent 또는 `mission_plan` JSON으로 변환 |
-| `mission_manager` | Intent 수신 → Mission 실행/취소/재시도/Timeout 관리 |
-| `go2_skill_server_sim` | NavigateToPose / RotateInPlace / ScanScene Action 서버 (Sim Backend) |
-| `perception_node_sim` | YOLO 또는 Ground-Truth 기반 객체 탐지, `/perception/visible_objects` 발행 |
-| `llm_yolo_interfaces` | Intent.msg / NavigateToPose.action / RotateInPlace.action / ScanScene.action 정의 |
+| Sim | MVP 기능 구현 및 대표 회귀 시나리오 검증 완료 |
+| Real | 1차 실기체 backend 구현 및 일부 end-to-end 경로 1차 확인 완료 |
+| LLM | Rule-based parser와 Ollama backend 공존 |
+| Perception | Sim은 YOLO11n, Real은 YOLO11s-seg 기반 |
+| Navigation | Sim은 Nav2 우선, direct `/cmd_vel` fallback 유지 |
+| Real control | `/cmd_vel`을 내부 bridge에서 `/api/sport/request`로 변환 |
 
----
+## Architecture
 
-## ✅ 현재 구현 완료 기능
+```text
+llm_yolo/
+├── llm_command_router      # 자연어 -> Intent 또는 mission_plan
+├── mission_manager         # mission 실행, 조건 분기, timeout, cancel
+├── llm_yolo_interfaces     # Intent.msg 및 Navigate/Rotate/Scan/Approach actions
+├── backends/
+│   ├── sim                 # Isaac Sim / Nav2 / sim perception
+│   └── real                # Go2 camera/depth / direct approach / sport request bridge
+├── launch/
+│   ├── common              # 공통 mission stack
+│   ├── sim                 # sim launch
+│   └── real                # real launch
+├── configs/
+│   ├── common              # mission, LLM, named places
+│   ├── sim                 # sim topics, nav, perception
+│   └── real                # real topics, perception, approach, bridge, watchdog
+├── scripts                 # 실행/모니터링 helper
+└── docs                    # 운영 문서, 계획, 참조 문서
+```
 
-- [x] Named Place 이동 (`center 로 가`)
-- [x] 객체 탐색 + Scan 회전 탐색 (`chair 찾아`)
-- [x] Ground-Truth Perception (Prim Path 기반)
-- [x] YOLO 기반 Perception (`chair`, `tv`)
-- [x] Ollama LLM 기반 자연어 해석
-- [x] `mission_plan` 복합 명령 & 조건 실행 (`run_if`)
-- [x] `approach_object` — YOLO + Depth + TF 기반 객체 접근
-- [x] `speed_hint` 속도 조절 (천천히 / 빠르게)
-- [x] 긴급 정지 / 정지 해제 (`emergency_stop`)
-- [x] Nav2 / Direct 이중 주행 경로
-- [x] Person 검출 기반 Pause / Resume
+자세한 흐름도는 [docs/overview/architecture.md](docs/overview/architecture.md)를 참고합니다.
 
----
+## Implemented Features
 
-## 📋 요구 환경
+### Common
 
-| 항목 | 버전 |
+- `/user_text` 자연어 명령 수신
+- Rule-based parser와 Ollama LLM backend
+- `Intent.msg` 기반 단일 명령 실행
+- `mission_plan` JSON 기반 복합 명령 실행
+- `run_if=always | previous_failed | previous_succeeded` 조건 실행
+- mission timeout, cancel, emergency stop/clear
+- web monitor dashboard
+
+### Sim
+
+- named place 이동
+- `scan_scene`
+- 회전 탐색 기반 `find_object`
+- YOLO 기반 객체 탐지
+- YOLO bbox + depth + camera info + TF 기반 object pose 추정
+- `/perception/object_poses` publish
+- `approach_object`
+- `chair 앞으로 가`, `tv 앞으로 가` 검증
+- Nav2 action bridge
+- direct `/cmd_vel` fallback
+- `speed_hint` (`slow`, `normal`, `fast`)
+- `person` 검출 기반 pause/resume 및 거리 조건
+- 대표 회귀 시나리오 실검증
+
+### Real
+
+- real 전용 perception node 구현
+- real 전용 approach backend 구현
+- onboard watchdog node 연결
+- `/cmd_vel -> /api/sport/request` bridge 구현
+- real launch에 perception, approach, bridge, watchdog 통합
+- 실기체 camera/depth/camera_info topic 확인
+- `camera_link` 기준 object pose publish
+- YOLO11s-seg mask 기반 depth cluster 적용
+- `/perception/visible_objects`, `/perception/object_poses`, `/perception/object_markers`, `/perception_debug` publish 경로 구현
+- `chair 앞으로 가` 경로에서 1차 성공 흐름 확인
+- approach 중 `/cmd_vel` 출력 확인
+- emergency stop 관련 stop/abort 경로 반영
+
+## Requirements
+
+| 항목 | 기준 |
 |---|---|
 | OS | Ubuntu 22.04 |
 | ROS 2 | Humble |
 | Python | 3.10 |
-| Isaac Sim | 5.1.0 (conda `isaaclab` 환경) |
+| Sim | Isaac Sim 5.1.0 + 외부 Go2 sim 환경 |
 | YOLO | Ultralytics 8.4.14 |
-| LLM (선택) | Ollama + `qwen2.5:latest` |
+| LLM | Ollama + `qwen2.5:latest` |
+| Real robot | Unitree Go2 Edu + `unitree_ros2` |
 
----
+Isaac Sim용 conda 환경과 `llm_yolo`용 `.venv_yolo`는 분리해서 사용합니다.
 
-## 🧱 선행 준비
+## Model Files
 
-이 프로젝트를 실행하기 전에 `go2_sim` 시뮬레이션 환경과 SLAM / Nav2 경로를 먼저 준비해야 합니다.
+모델 가중치는 GitHub에 포함하지 않습니다. 실행 전 프로젝트 루트에 배치합니다.
 
-- 참고 저장소: `https://github.com/ctrlcvlab/Go2_Intelligence_Framework.git`
-- 위 저장소의 가이드를 참고하여 `go2_sim` 환경 설정, SLAM 구성, Nav2 구동이 가능한 상태를 먼저 맞춘 뒤 본 프로젝트를 실행하세요.
+| 파일 | 용도 |
+|---|---|
+| `yolo11n.pt` | sim YOLO perception |
+| `yolo11s-seg.pt` | real YOLO segmentation perception |
 
----
+`.gitignore`에서 `*.pt`는 제외되어 있습니다.
 
-## ⚙️ 최초 환경 설정
-
-> [!WARNING]
-> Isaac Sim용 `isaaclab` conda 환경과 llm_yolo용 `.venv_yolo` Python 가상환경은 **반드시 분리**하여 사용하세요.
-
-### 1. Python 가상환경 생성
+## Setup
 
 ```bash
 cd /home/jnu/llm_yolo
 python3 -m venv .venv_yolo
 source .venv_yolo/bin/activate
-```
 
-> 오류 발생 시: `sudo apt install python3.10-venv`
-
-### 2. 의존성 패키지 설치
-
-```bash
 python -m pip install --upgrade pip setuptools wheel
 pip install pyyaml jinja2 typeguard
 pip install torch torchvision torchaudio
 pip install ultralytics==8.4.14
 ```
 
-### 3. ROS 2 패키지 빌드
+빌드:
 
 ```bash
 cd /home/jnu/llm_yolo
@@ -97,14 +140,13 @@ colcon build
 source install/setup.bash
 ```
 
----
+YOLO venv 세부 기록은 [docs/setup/yolo_venv_guide.md](docs/setup/yolo_venv_guide.md)를 참고합니다.
 
-## 🚀 실행 방법
+## Run: Sim
 
-> [!IMPORTANT]
-> Nav2 기반 주행/탐색을 사용하려면 Isaac Sim 실행 후 SLAM을 통해 맵을 먼저 생성하고, localization 및 navigation이 가능한 상태를 확보한 뒤 아래 단계를 진행해야 합니다.
+Sim은 외부 Go2 Isaac Sim 환경이 먼저 실행되어 있어야 합니다.
 
-### 1단계 — Isaac Sim 실행
+### 1. Isaac Sim / Go2 Sim
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -112,13 +154,17 @@ conda activate isaaclab
 python /home/jnu/go2_sim/scripts/go2_sim.py
 ```
 
-### 2단계 — llm_yolo 스택 실행 (새 터미널)
+Nav2를 사용하는 경우 별도 터미널에서 Go2 sim navigation stack을 실행합니다.
+
+### 2. llm_yolo Sim Stack
 
 ```bash
 bash /home/jnu/llm_yolo/scripts/run_sim.sh
+```
 
-혹은
+동일한 실행을 수동으로 풀면:
 
+```bash
 cd /home/jnu/llm_yolo
 source .venv_yolo/bin/activate
 source /opt/ros/humble/setup.bash
@@ -126,223 +172,222 @@ source install/setup.bash
 ros2 launch launch/sim/mvp_sim.launch.py
 ```
 
-> [!NOTE]
-> 코드 변경 후에는 항상 `colcon build && source install/setup.bash`를 먼저 실행하세요.
+### 3. Web Monitor
 
-### 3단계 — 웹 모니터 실행 (선택, 새 터미널)
+자동 모드:
 
 ```bash
 bash /home/jnu/llm_yolo/scripts/run_monitor_dashboard.sh
 ```
 
-기본값으로 브라우저가 자동 실행되며, `SIM MONITOR` 대시보드가 열립니다.
-
-자동 열기 없이 실행하려면:
+브라우저 자동 열기 없이:
 
 ```bash
-bash /home/jnu/llm_yolo/scripts/run_monitor_dashboard.sh 127.0.0.1 8765 --no-open
+bash /home/jnu/llm_yolo/scripts/run_monitor_dashboard.sh 127.0.0.1 8765 --no-open --mode auto
 ```
 
----
-
-## 💬 명령어 예시
-
-### 기본 명령
+sim으로 고정:
 
 ```bash
-# Named Place 이동
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'center 로 가'}"
+bash /home/jnu/llm_yolo/scripts/run_monitor_dashboard.sh 127.0.0.1 8765 --no-open --mode sim
+```
 
-# 속도 조절 이동
+현재 `auto` 모드는 `eno1`이 살아 있으면 real, 아니면 sim으로 동작합니다. sim 모드에서는 CycloneDDS interface를 `lo`로 설정합니다.
+
+## Run: Real
+
+Real 실행은 Go2 실기체, `unitree_ros2`, 카메라/depth topic, `/api/sport/request`가 준비된 상태를 전제로 합니다.
+
+```bash
+bash /home/jnu/llm_yolo/scripts/run_real.sh
+```
+
+수동 실행:
+
+```bash
+cd /home/jnu/llm_yolo
+source /home/jnu/llm_yolo/.venv_yolo/bin/activate
+source /home/jnu/unitree_ros2/setup.sh
+source /home/jnu/llm_yolo/install/setup.bash
+export PYTHONPATH="/home/jnu/llm_yolo/.venv_yolo/lib/python3.10/site-packages:${PYTHONPATH:-}"
+ros2 launch /home/jnu/llm_yolo/launch/real/mvp_real.launch.py
+```
+
+onboard guard만 실행:
+
+```bash
+bash /home/jnu/llm_yolo/scripts/run_onboard_min.sh
+```
+
+real 모니터:
+
+```bash
+bash /home/jnu/llm_yolo/scripts/run_monitor_dashboard.sh 127.0.0.1 8765 --no-open --mode real
+```
+
+## Command Examples
+
+명령은 `/user_text` topic으로 보냅니다.
+
+### Navigation
+
+```bash
+ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'center 로 가'}"
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: '천천히 center 로 가'}"
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: '빠르게 center 로 가'}"
 ```
 
-### 객체 탐색
+### Find / Scan
 
 ```bash
-# YOLO 기반 객체 탐색 (현재 운영 클래스: chair, tv)
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾아'}"
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'tv 찾아'}"
 ```
 
-### 객체 접근 (Approach)
+### Approach
 
 ```bash
-# YOLO + Depth + TF 기반 객체 위치 추정 후 접근
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 앞으로 가'}"
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'tv 앞으로 가'}"
 ```
 
-### 복합 명령 (mission_plan)
+### Mission Plan
 
 ```bash
-# 순차 실행
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'center로 가서 chair 찾아'}"
-
-# 조건부 복귀 (찾지 못하면 돌아오기)
-ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾고 없으면 center로 돌아와'}"
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾고 없으면 center로 복귀'}"
-
-# 조건부 재시도 (이동 후 다시 탐색)
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 찾고 없으면 center로 가서 다시 찾아'}"
-
-# 대체 대상 탐색
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'yellow_box 찾고 없으면 red_box 찾아'}"
 ```
 
-### 안전 제어
+### Safety
 
 ```bash
-# 긴급 정지
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: '긴급 정지'}"
-
-# 정지 해제 (이후 명령 다시 수행 가능)
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: '정지 해제'}"
 ```
 
----
-
-## 🔍 상태 모니터링
-
-### 핵심 토픽 확인
+## Monitoring Commands
 
 ```bash
-# Mission 상태 확인
 ros2 topic echo /mission_state
-
-# Visible Object 목록 확인 (Ground-Truth)
-ros2 topic echo /sim/visible_objects
-
-# Perception 결과 확인
-ros2 topic echo /perception/visible_objects
-
-# 객체 Pose 추정 결과 확인 (approach_object용)
-ros2 topic echo /perception/object_poses
-
-# 긴급 정지 상태 확인
-ros2 topic echo /emergency_stop
-
-# mission_plan 수신 확인 (복합 명령)
 ros2 topic echo /mission_plan
+ros2 topic echo /perception/visible_objects
+ros2 topic echo /perception/object_poses
+ros2 topic echo /perception_debug
+ros2 topic echo /emergency_stop
 ```
 
-### 표준 모니터링 스크립트
+Sim helper:
 
 ```bash
-# 미션/주행/안전 상태 통합 모니터링
 /home/jnu/llm_yolo/scripts/monitor_sim.sh core
-
-# Perception 상태 모니터링
 /home/jnu/llm_yolo/scripts/monitor_sim.sh perception
-
-# 객체 Pose 모니터링
 /home/jnu/llm_yolo/scripts/monitor_sim.sh object
+/home/jnu/llm_yolo/scripts/monitor_sim.sh safety
+/home/jnu/llm_yolo/scripts/monitor_sim.sh plan
+/home/jnu/llm_yolo/scripts/monitor_sim.sh nav
 ```
 
----
+ROS bag 기록:
 
-## ⚙️ 주요 설정 파일
+```bash
+bash /home/jnu/llm_yolo/scripts/record_bag.sh
+```
+
+## Current Sim Notes
+
+| 항목 | 상태 |
+|---|---|
+| Named places | `center`, `chair_room`, `commode_room`, `tv_room`, `living_room` |
+| YOLO model | `yolo11n.pt` |
+| Sim perception mode | `yolo` |
+| Depth mode | `bbox_cluster` |
+| Operational object classes | `chair`, `tv` |
+| Person safety | pause/resume and distance threshold verified |
+| Navigation | Nav2 path verified, direct path retained |
+
+대표 검증 명령:
+
+```text
+center 로 가
+chair 찾아
+chair 찾고 없으면 center로 복귀
+chair 찾고 없으면 center로 가서 다시 찾아
+yellow_box 찾고 없으면 red_box 찾아
+chair 앞으로 가
+긴급 정지
+정지 해제
+```
+
+## Current Real Notes
+
+| 항목 | 상태 |
+|---|---|
+| YOLO model | `/home/jnu/llm_yolo/yolo11s-seg.pt` |
+| Depth mode | `mask_cluster` |
+| Object pose frame | `camera_link` |
+| Camera image | `/camera/color/image_raw` |
+| Depth image | `/camera/depth/image_rect_raw` |
+| Camera info | `/camera/color/camera_info` |
+| Command output | `/cmd_vel` |
+| Final robot command | `/api/sport/request` |
+| Bridge | `cmd_vel_to_sport_request_node` |
+| Visual markers | `/perception/object_markers` |
+
+Real perception candidate classes:
+
+```text
+person, chair, couch, dining table, tv, laptop, keyboard, mouse, bottle, cup
+```
+
+Natural-language command target classes currently configured:
+
+```text
+chair, couch, dining table, tv
+```
+
+## Important Config Files
 
 | 파일 | 설명 |
 |---|---|
-| [`configs/sim/sim_named_places.yaml`](configs/sim/sim_named_places.yaml) | Named Place 좌표 정의 (현재: `center` 1개) |
-| [`configs/sim/sim_visible_objects.json`](configs/sim/sim_visible_objects.json) | Ground-Truth 객체와 Prim Path 매핑 |
-| [`configs/common/llm_params.yaml`](configs/common/llm_params.yaml) | LLM 모드 / 모델 / Timeout 설정 |
-| [`configs/common/mission_params.yaml`](configs/common/mission_params.yaml) | Fallback 위치 등 Mission 파라미터 |
+| [configs/common/llm_params.yaml](configs/common/llm_params.yaml) | LLM backend, named places, object classes |
+| [configs/common/mission_params.yaml](configs/common/mission_params.yaml) | mission timeout, fallback, approach distance |
+| [configs/sim/sim_topics.yaml](configs/sim/sim_topics.yaml) | sim action/topic wiring |
+| [configs/sim/sim_perception_params.yaml](configs/sim/sim_perception_params.yaml) | sim YOLO/depth parameters |
+| [configs/sim/sim_named_places.yaml](configs/sim/sim_named_places.yaml) | sim named place coordinates |
+| [configs/real/real_topics.yaml](configs/real/real_topics.yaml) | real sensor/control topic mapping |
+| [configs/real/real_perception_params.yaml](configs/real/real_perception_params.yaml) | real YOLO segmentation/depth parameters |
+| [configs/real/real_nav_params.yaml](configs/real/real_nav_params.yaml) | real approach control parameters |
+| [configs/real/cmd_vel_bridge_params.yaml](configs/real/cmd_vel_bridge_params.yaml) | `/cmd_vel` to `/api/sport/request` bridge |
+| [configs/real/watchdog_params.yaml](configs/real/watchdog_params.yaml) | real watchdog/deadman guard |
 
-### LLM 모드 전환
-
-`configs/common/llm_params.yaml` 수정:
-
-```yaml
-mode: llm            # "rule_based" (기본) 또는 "llm" (Ollama 사용)
-ollama_model: qwen2.5:latest
-ollama_timeout_sec: 15.0
-```
-
-> [!NOTE]
-> `llm` 모드 사용 시 Ollama 서버가 미리 실행 중이어야 합니다.
-> ```bash
-> ollama run qwen2.5:latest
-> ```
-
-### 주행 모드 전환
-
-`launch/sim/mvp_sim.launch.py` 내 파라미터 수정:
-
-```yaml
-navigation_mode: nav2    # "nav2" (기본) 또는 "direct" (cmd_vel 직접 제어)
-```
-
----
-
-## 🗂️ 운영 현황
-
-### Named Place
-
-현재 운영 Named Place:
-
-- `center`
-- `chair_room`
-- `commode_room`
-- `tv_room`
-- `living_room`
-
-### YOLO 운영 객체 클래스
-
-| 클래스 | 탐지 | Pose 추정 | 접근 |
-|---|---|---|---|
-| `chair` | ✅ | ✅ | ✅ |
-| `tv` | ✅ | ✅ | ✅ |
-
----
-
-## 📁 디렉토리 구조
-
-```
-llm_yolo/
-├── configs/
-│   ├── common/          # llm_params.yaml, mission_params.yaml, named_places.yaml
-│   └── sim/             # sim_named_places.yaml, sim_visible_objects.json
-├── launch/
-│   ├── common/          # mission_stack.launch.py
-│   └── sim/             # mvp_sim.launch.py
-├── backends/
-│   ├── sim/             # go2_skill_server_sim, perception_node_sim
-│   └── real/            # go2_skill_server_real (예정), perception_node_real (예정)
-├── llm_yolo_interfaces/ # Intent.msg, NavigateToPose/RotateInPlace/ScanScene.action
-├── mission_manager/
-├── llm_command_router/
-├── scripts/             # monitor_sim.sh, record_bag.sh
-├── docs/                # sim_mode.md, test_scenarios.md, architecture.md
-├── maps/
-├── bags/
-└── tests/
-```
-
----
-
-## 📚 참고 문서
+## Documentation
 
 | 문서 | 설명 |
 |---|---|
-| [`docs/sim_mode.md`](docs/sim_mode.md) | Sim 모드 운영 가이드 |
-| [`docs/test_scenarios.md`](docs/test_scenarios.md) | 회귀 테스트 시나리오 및 Pass/Fail 기준 |
-| [`plan.md`](plan.md) | 전체 구현 계획 및 우선순위 |
-| [`progress.md`](progress.md) | 완료 이력 |
+| [docs/README.md](docs/README.md) | 문서 목차 |
+| [docs/overview/architecture.md](docs/overview/architecture.md) | 전체 구조 |
+| [docs/operation/sim_mode.md](docs/operation/sim_mode.md) | sim 운영 |
+| [docs/operation/real_mode.md](docs/operation/real_mode.md) | real 운영 |
+| [docs/operation/test_scenarios.md](docs/operation/test_scenarios.md) | sim 회귀 시나리오 |
+| [docs/reference/mission_plan_schema.md](docs/reference/mission_plan_schema.md) | mission plan schema |
+| [docs/reference/sim_ros2_contract.md](docs/reference/sim_ros2_contract.md) | Isaac Sim ROS 2 contract |
+| [docs/planning/sim_progress.md](docs/planning/sim_progress.md) | sim 완료 기록 |
+| [docs/planning/real_progress.md](docs/planning/real_progress.md) | real 진행 기록 |
 
----
+## Repository Notes
 
-## 🛣️ 다음 단계 (Roadmap)
+GitHub에는 다음 산출물을 포함하지 않습니다.
 
-| Phase | 내용 | 상태 |
-|---|---|---|
-| Phase 4-2 | 객체 탐색/접근 일반화 (`find → approach` 통합 시나리오) | 🔴 최우선 |
-| Phase 4-3 | 속성 기반 개체 선택 (`가까운 chair`, `먼 tv`) | 예정 |
-| Phase 4-4 | Person 대응 정책 고도화 | 고도화 예정 |
-| Phase 4-5 | VLM 기반 의미 인지 (장면 설명 계층) | 후순위 |
-| Phase 4-6 | OpenRouter 클라우드 LLM 경로 | 후순위 |
-| Phase 5 | Real Backend 연결 (Go2 실기체) | 예정 |
-| Phase 6 | 실기체 검증 | 예정 |
-| Phase 7 | ONNX Export / Jetson 배포 준비 | 예정 |
+```text
+.venv_yolo/
+build/
+install/
+log/
+bags/
+*.pt
+mobileclip_blt.ts
+```
+
+현재 모델 파일은 로컬에 직접 배치해서 사용합니다. `mobileclip_blt.ts`는 현재 코드 경로에서 사용하지 않는 open-vocabulary 실험용 모델 아티팩트로 분류했습니다.

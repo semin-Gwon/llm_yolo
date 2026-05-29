@@ -36,3 +36,19 @@ bags/
 # 7. OS 시스템 파일 (맥OS나 윈도우에서 자동 생성되는 찌꺼기)
 .DS_Store
 Thumbs.db
+
+# 8. 로컬 에이전트/작업 환경 파일
+.agent/
+.codex/
+
+# 9. 대용량 실험 모델 아티팩트
+mobileclip_blt.ts
+
+# 10. 실행 중 생성되는 맵 파일 (.gitkeep은 유지 가능)
+maps/**/*.yaml
+maps/**/*.pgm
+maps/**/*.png
+maps/**/*.db
+maps/**/*.db3
+maps/**/*.sqlite
+maps/**/*.sqlite3

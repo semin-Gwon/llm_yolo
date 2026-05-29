@@ -76,7 +76,7 @@ ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'yellow_box 찾고 
 ros2 topic pub --once /user_text std_msgs/msg/String "{data: 'chair 앞으로 가'}"
 ```
 
-자세한 시나리오는 [test_scenarios.md](/home/jnu/llm_yolo/docs/test_scenarios.md)를 따른다.
+자세한 시나리오는 [test_scenarios.md](/home/jnu/llm_yolo/docs/operation/test_scenarios.md)를 따른다.
 
 ## 운영 원칙
 

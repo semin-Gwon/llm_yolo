@@ -1,10 +1,10 @@
 # Real Robot Plan Draft
 
-`plan.md` 반영 예정 위치:
-- 현재는 `plan.md`에 바로 병합하지 않고, 실기체 1차 검증 범위가 확정된 뒤 별도 실기체 섹션으로 반영
+문서 위치:
+- 실기체 1차 검증 범위를 별도 계획 문서로 관리한다.
 
 진행 기록:
-- 계획 실행 과정과 검증 이력은 [real_plan_progress.md](/home/jnu/llm_yolo/real_plan_progress.md)에 기록한다.
+- 계획 실행 과정과 검증 이력은 [real_progress.md](/home/jnu/llm_yolo/docs/planning/real_progress.md)에 기록한다.
 
 ## 0. 강한 보호 원칙
 

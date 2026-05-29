@@ -9,6 +9,8 @@ llm_command_router_node:
     - living_room
     object_classes:
     - chair
+    - couch
+    - dining table
     - tv
     ollama_base_url: http://127.0.0.1:11434
     ollama_model: qwen2.5:latest

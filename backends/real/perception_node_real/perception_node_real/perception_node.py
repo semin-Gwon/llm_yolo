@@ -9,6 +9,7 @@ from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class PerceptionNode(Node):
@@ -24,6 +25,12 @@ class PerceptionNode(Node):
         self.declare_parameter('yolo_model', 'yolo11n.pt')
         self.declare_parameter('yolo_conf_threshold', 0.25)
         self.declare_parameter('yolo_target_classes', ['chair'])
+        self.declare_parameter('enable_debug_image', False)
+        self.declare_parameter('debug_image_topic', '/perception/debug_image')
+        self.declare_parameter('enable_object_markers', False)
+        self.declare_parameter('object_marker_topic', '/perception/object_markers')
+        self.declare_parameter('marker_lifetime_sec', 0.6)
+        self.declare_parameter('marker_scale_m', 0.14)
         self.declare_parameter('depth_mode', 'bbox_cluster')
         self.declare_parameter('depth_center_patch_radius_px', 2)
         self.declare_parameter('depth_min_valid_m', 0.05)
@@ -33,6 +40,8 @@ class PerceptionNode(Node):
         self.declare_parameter('depth_center_weight', 1.0)
         self.declare_parameter('depth_size_weight', 0.02)
         self.declare_parameter('depth_near_penalty_weight', 0.15)
+        self.declare_parameter('max_objects_per_class', 1)
+        self.declare_parameter('same_object_distance_threshold_m', 0.45)
 
         self.pub = self.create_publisher(
             String,
@@ -46,6 +55,28 @@ class PerceptionNode(Node):
         )
         self.debug_pub = self.create_publisher(String, '/perception_debug', 10)
         self.timer = self.create_timer(1.0, self.publish_state)
+        self.bridge = None
+        self.debug_image_pub = None
+        self.marker_pub = None
+        if bool(self.get_parameter('enable_debug_image').value):
+            try:
+                from cv_bridge import CvBridge
+                self.bridge = CvBridge()
+                self.debug_image_pub = self.create_publisher(
+                    Image,
+                    str(self.get_parameter('debug_image_topic').value),
+                    10,
+                )
+            except Exception as exc:
+                self.get_logger().warning(
+                    f'debug image disabled: cv_bridge unavailable or incompatible: {exc}'
+                )
+        if bool(self.get_parameter('enable_object_markers').value):
+            self.marker_pub = self.create_publisher(
+                MarkerArray,
+                str(self.get_parameter('object_marker_topic').value),
+                10,
+            )
 
         self.model = self.load_yolo_model(str(self.get_parameter('yolo_model').value))
         raw_targets = self.get_parameter('yolo_target_classes').value
@@ -59,6 +90,7 @@ class PerceptionNode(Node):
         self.last_yolo_error = None
         self.last_pose_stamp = None
         self.last_image_frame = ''
+        self.last_debug_image_msg = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -186,6 +218,90 @@ class PerceptionNode(Node):
             return None, None
         return float(best['depth_m']), best
 
+    def _resize_mask_nearest(self, mask: np.ndarray, width: int, height: int) -> np.ndarray:
+        if mask.shape == (height, width):
+            return mask.astype(bool)
+        from PIL import Image as PILImage
+
+        image = PILImage.fromarray((mask.astype(np.uint8) * 255))
+        image = image.resize((width, height), resample=PILImage.Resampling.NEAREST)
+        return np.asarray(image) > 0
+
+    def _lookup_depth_mask_cluster(self, depth: np.ndarray, mask: np.ndarray):
+        h, w = depth.shape
+        if mask.shape != depth.shape:
+            mask = self._resize_mask_nearest(mask, w, h)
+        valid_mask = mask & self._valid_depth_mask(depth)
+        if not np.any(valid_mask):
+            return None, None
+
+        ys, xs = np.nonzero(valid_mask)
+        values = depth[valid_mask].astype(np.float32)
+        order = np.argsort(values)
+        xs = xs[order]
+        ys = ys[order]
+        values = values[order]
+
+        gap = float(self.get_parameter('depth_cluster_gap_m').value)
+        min_pixels = int(self.get_parameter('depth_cluster_min_pixels').value)
+        center_weight = float(self.get_parameter('depth_center_weight').value)
+        size_weight = float(self.get_parameter('depth_size_weight').value)
+        near_penalty = float(self.get_parameter('depth_near_penalty_weight').value)
+
+        mask_ys, mask_xs = np.nonzero(mask)
+        if mask_xs.size == 0:
+            return None, None
+        mask_center_x = float(np.mean(mask_xs))
+        mask_center_y = float(np.mean(mask_ys))
+        mask_diag = max(math.hypot(float(w), float(h)), 1.0)
+
+        best = None
+        start = 0
+        total = values.size
+        while start < total:
+            end = start + 1
+            while end < total and float(values[end] - values[end - 1]) <= gap:
+                end += 1
+            cluster_values = values[start:end]
+            cluster_xs = xs[start:end].astype(np.float32)
+            cluster_ys = ys[start:end].astype(np.float32)
+            pixel_count = int(cluster_values.size)
+            if pixel_count >= min_pixels:
+                median_depth = float(np.median(cluster_values))
+                u_depth = float(np.mean(cluster_xs))
+                v_depth = float(np.mean(cluster_ys))
+                center_distance_norm = math.hypot(u_depth - mask_center_x, v_depth - mask_center_y) / mask_diag
+                score = (
+                    center_weight * (1.0 - center_distance_norm)
+                    + size_weight * float(pixel_count)
+                    - near_penalty * max(0.0, 1.0 - median_depth)
+                )
+                candidate = {
+                    'depth_m': median_depth,
+                    'score': score,
+                    'pixel_count': pixel_count,
+                    'u_depth': u_depth,
+                    'v_depth': v_depth,
+                }
+                if best is None or candidate['score'] > best['score']:
+                    best = candidate
+            start = end
+        if best is None:
+            return None, None
+        return float(best['depth_m']), best
+
+    def _mask_for_detection(self, result, index: int, width: int, height: int):
+        masks = getattr(result, 'masks', None)
+        if masks is None or getattr(masks, 'data', None) is None:
+            return None
+        if index >= len(masks.data):
+            return None
+        try:
+            mask = masks.data[index].detach().cpu().numpy() > 0.5
+        except Exception:
+            return None
+        return self._resize_mask_nearest(mask, width, height)
+
     def _lookup_depth(self, u: int, v: int, x0: float | None = None, y0: float | None = None, x1: float | None = None, y1: float | None = None):
         if self.last_depth_msg is None:
             return None, None
@@ -199,6 +315,26 @@ class PerceptionNode(Node):
         if patch_depth is None:
             return None, None
         return patch_depth, {'mode': 'center_patch'}
+
+    def _lookup_depth_for_detection(self, u: int, v: int, result, index: int, image_width: int, image_height: int, x0: float, y0: float, x1: float, y1: float):
+        if self.last_depth_msg is None:
+            return None, None, float(u), float(v)
+        depth = self._depth_to_numpy(self.last_depth_msg)
+        mode = str(self.get_parameter('depth_mode').value).strip().lower()
+        use_mask = mode in ('mask_cluster', 'segmentation', 'segmentation_mask', 'auto')
+        if use_mask:
+            mask = self._mask_for_detection(result, index, depth.shape[1], depth.shape[0])
+            if mask is not None:
+                mask_depth, mask_debug = self._lookup_depth_mask_cluster(depth, mask)
+                if mask_depth is not None:
+                    u_depth = float(mask_debug.get('u_depth', u))
+                    v_depth = float(mask_debug.get('v_depth', v))
+                    u_image = u_depth * float(image_width) / float(depth.shape[1])
+                    v_image = v_depth * float(image_height) / float(depth.shape[0])
+                    return mask_depth, {'mode': 'mask_cluster', **mask_debug}, u_image, v_image
+
+        depth_m, depth_info = self._lookup_depth(u, v, x0, y0, x1, y1)
+        return depth_m, depth_info, float(u), float(v)
 
     def _camera_point_from_pixel(self, u: float, v: float, depth_m: float):
         if self.last_camera_info is None:
@@ -239,6 +375,138 @@ class PerceptionNode(Node):
         rotated = self._rotate_vector(q.x, q.y, q.z, q.w, point_camera)
         return np.array([rotated[0] + t.x, rotated[1] + t.y, rotated[2] + t.z], dtype=np.float64)
 
+    def _suppress_duplicate_objects(self, objects: list[dict], image_width: int, image_height: int):
+        threshold_m = float(self.get_parameter('same_object_distance_threshold_m').value)
+        max_per_class = int(self.get_parameter('max_objects_per_class').value)
+        unlimited_per_class = max_per_class <= 0
+        grouped: dict[str, list[dict]] = {}
+        for item in objects:
+            grouped.setdefault(str(item.get('class_name', '')), []).append(item)
+
+        selected: list[dict] = []
+        for class_name, candidates in grouped.items():
+            ranked = sorted(
+                candidates,
+                key=lambda item: (
+                    float(item.get('confidence', 0.0)),
+                    float(item.get('bbox_area_norm', 0.0)),
+                    -abs(float(item.get('bbox_center_x_norm', 0.5)) - 0.5),
+                    -math.hypot(float(item.get('x_m', 0.0)), float(item.get('y_m', 0.0))),
+                ),
+                reverse=True,
+            )
+            kept: list[dict] = []
+            for candidate in ranked:
+                duplicate = False
+                for existing in kept:
+                    dx = float(candidate.get('x_m', 0.0)) - float(existing.get('x_m', 0.0))
+                    dy = float(candidate.get('y_m', 0.0)) - float(existing.get('y_m', 0.0))
+                    dz = float(candidate.get('z_m', 0.0)) - float(existing.get('z_m', 0.0))
+                    if math.sqrt(dx * dx + dy * dy + dz * dz) <= threshold_m:
+                        duplicate = True
+                        break
+                if duplicate:
+                    continue
+                kept.append(candidate)
+                if not unlimited_per_class and len(kept) >= max_per_class:
+                    break
+            selected.extend(kept)
+        return selected
+
+    def _draw_box(self, image: np.ndarray, x0: int, y0: int, x1: int, y1: int, color: tuple[int, int, int]):
+        image[max(0, y0):min(image.shape[0], y0 + 2), max(0, x0):min(image.shape[1], x1)] = color
+        image[max(0, y1 - 2):min(image.shape[0], y1), max(0, x0):min(image.shape[1], x1)] = color
+        image[max(0, y0):min(image.shape[0], y1), max(0, x0):min(image.shape[1], x0 + 2)] = color
+        image[max(0, y0):min(image.shape[0], y1), max(0, x1 - 2):min(image.shape[1], x1)] = color
+
+    def _draw_label(self, image: np.ndarray, x0: int, y0: int, label: str, color: tuple[int, int, int]):
+        if not label:
+            return
+        block_h = 16
+        block_w = min(image.shape[1] - max(0, x0), max(40, 8 * len(label)))
+        top = max(0, y0 - block_h)
+        left = max(0, x0)
+        image[top:min(image.shape[0], y0), left:min(image.shape[1], left + block_w)] = color
+
+    def _publish_debug_image(self, image: np.ndarray, header, overlays: list[dict]):
+        if self.debug_image_pub is None or self.bridge is None:
+            return
+        try:
+            canvas = image.copy()
+            for overlay in overlays:
+                x0 = int(overlay.get('x0', 0))
+                y0 = int(overlay.get('y0', 0))
+                x1 = int(overlay.get('x1', 0))
+                y1 = int(overlay.get('y1', 0))
+                color = tuple(int(v) for v in overlay.get('color', (0, 255, 0)))
+                label = str(overlay.get('label', ''))
+                self._draw_box(canvas, x0, y0, x1, y1, color)
+                self._draw_label(canvas, x0, y0, label, color)
+            msg = self.bridge.cv2_to_imgmsg(canvas[:, :, ::-1], encoding='bgr8')
+            msg.header = header
+            self.last_debug_image_msg = msg
+            self.debug_image_pub.publish(msg)
+        except Exception as exc:
+            self.last_yolo_error = f'debug_image_failed:{exc}'
+
+    def _publish_object_markers(self):
+        if self.marker_pub is None:
+            return
+        frame_id = str(self.get_parameter('object_pose_frame').value)
+        marker_array = MarkerArray()
+        lifetime = float(self.get_parameter('marker_lifetime_sec').value)
+        scale = float(self.get_parameter('marker_scale_m').value)
+        stamp = self.get_clock().now().to_msg()
+        for idx, obj in enumerate(self.last_object_poses):
+            ns = f'perception_{str(obj.get("class_name", "object"))}'
+            sphere = Marker()
+            sphere.header.frame_id = frame_id
+            sphere.header.stamp = stamp
+            sphere.ns = ns
+            sphere.id = idx * 2
+            sphere.type = Marker.SPHERE
+            sphere.action = Marker.ADD
+            sphere.pose.position.x = float(obj.get('x_m', 0.0))
+            sphere.pose.position.y = float(obj.get('y_m', 0.0))
+            sphere.pose.position.z = float(obj.get('z_m', 0.0))
+            sphere.pose.orientation.w = 1.0
+            sphere.scale.x = scale
+            sphere.scale.y = scale
+            sphere.scale.z = scale
+            sphere.color.r = 0.1
+            sphere.color.g = 0.9
+            sphere.color.b = 0.2
+            sphere.color.a = 0.85
+            sphere.lifetime.sec = int(lifetime)
+            sphere.lifetime.nanosec = int((lifetime - int(lifetime)) * 1e9)
+            marker_array.markers.append(sphere)
+
+            text = Marker()
+            text.header.frame_id = frame_id
+            text.header.stamp = stamp
+            text.ns = ns
+            text.id = idx * 2 + 1
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+            text.pose.position.x = float(obj.get('x_m', 0.0))
+            text.pose.position.y = float(obj.get('y_m', 0.0))
+            text.pose.position.z = float(obj.get('z_m', 0.0)) + scale * 0.9
+            text.pose.orientation.w = 1.0
+            text.scale.z = max(0.08, scale * 0.75)
+            text.color.r = 1.0
+            text.color.g = 1.0
+            text.color.b = 1.0
+            text.color.a = 0.95
+            text.text = (
+                f'{str(obj.get("class_name", "object"))} '
+                f'{float(obj.get("confidence", 0.0)):.2f} '
+                f'{math.hypot(float(obj.get("x_m", 0.0)), float(obj.get("y_m", 0.0))):.2f}m'
+            )
+            text.lifetime.sec = int(lifetime)
+            text.lifetime.nanosec = int((lifetime - int(lifetime)) * 1e9)
+            marker_array.markers.append(text)
+        self.marker_pub.publish(marker_array)
+
     def on_image(self, msg: Image):
         if msg.encoding.lower() not in ('rgb8', 'bgr8'):
             self.last_yolo_error = f'unsupported_encoding:{msg.encoding}'
@@ -263,6 +531,7 @@ class PerceptionNode(Node):
         names = []
         object_poses = []
         depth_debug = []
+        overlays = []
         source_frame = msg.header.frame_id or str(self.get_parameter('fallback_camera_frame').value).strip() or 'camera_optical_frame'
         for result in results[:1]:
             boxes = getattr(result, 'boxes', None)
@@ -281,14 +550,33 @@ class PerceptionNode(Node):
                 x0, y0, x1, y1 = xyxy_list[i]
                 u = int(round((float(x0) + float(x1)) * 0.5))
                 v = int(round((float(y0) + float(y1)) * 0.5))
-                depth_m, depth_info = self._lookup_depth(u, v, x0, y0, x1, y1)
+                overlay = {
+                    'x0': max(0, min(msg.width - 1, int(round(float(x0))))),
+                    'y0': max(0, min(msg.height - 1, int(round(float(y0))))),
+                    'x1': max(0, min(msg.width, int(round(float(x1))))),
+                    'y1': max(0, min(msg.height, int(round(float(y1))))),
+                    'color': (0, 200, 90),
+                    'label': f'{str(label)} {float(conf_list[i]) if i < len(conf_list) else float(conf):.2f}',
+                }
+                depth_m, depth_info, point_u, point_v = self._lookup_depth_for_detection(
+                    u, v, result, i, msg.width, msg.height, x0, y0, x1, y1
+                )
                 if depth_m is None:
+                    overlay['color'] = (220, 140, 0)
+                    overlay['label'] += ' depth?'
+                    overlays.append(overlay)
                     continue
-                point_camera = self._camera_point_from_pixel(float(u), float(v), depth_m)
+                point_camera = self._camera_point_from_pixel(float(point_u), float(point_v), depth_m)
                 if point_camera is None:
+                    overlay['color'] = (220, 140, 0)
+                    overlay['label'] += ' proj?'
+                    overlays.append(overlay)
                     continue
                 point_target = self._transform_point(point_camera, source_frame)
                 if point_target is None:
+                    overlay['color'] = (200, 40, 40)
+                    overlay['label'] += ' tf?'
+                    overlays.append(overlay)
                     continue
                 object_poses.append({
                     'class_name': str(label),
@@ -297,8 +585,10 @@ class PerceptionNode(Node):
                     'y_m': float(point_target[1]),
                     'z_m': float(point_target[2]),
                     'bbox_area_norm': float(max(0.0, (float(x1) - float(x0)) * (float(y1) - float(y0))) / float(msg.width * msg.height)),
-                    'bbox_center_x_norm': float(u) / float(msg.width) if msg.width > 0 else 0.5,
+                    'bbox_center_x_norm': float(point_u) / float(msg.width) if msg.width > 0 else 0.5,
                 })
+                overlay['label'] += f' {float(depth_m):.2f}m'
+                overlays.append(overlay)
                 if depth_info is not None:
                     depth_debug.append({
                         'class_name': str(label),
@@ -308,12 +598,17 @@ class PerceptionNode(Node):
                         'score': float(depth_info.get('score', 0.0)),
                     })
 
-        self.last_objects = sorted(set(names))
-        self.last_object_poses = object_poses
+        filtered_object_poses = self._suppress_duplicate_objects(object_poses, msg.width, msg.height)
+        filtered_names = sorted({str(item.get('class_name', '')) for item in filtered_object_poses if str(item.get('class_name', '')).strip()})
+
+        self.last_objects = filtered_names if filtered_names else sorted(set(names))
+        self.last_object_poses = filtered_object_poses
         self.last_depth_debug = depth_debug
         self.last_pose_stamp = {'sec': int(msg.header.stamp.sec), 'nanosec': int(msg.header.stamp.nanosec)}
         self.last_image_frame = source_frame
         self.last_yolo_error = None
+        self._publish_debug_image(image, msg.header, overlays)
+        self._publish_object_markers()
 
     def publish_state(self):
         normalized = String()

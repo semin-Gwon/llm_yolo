@@ -8,10 +8,10 @@ perception_node_real:
     camera_info_topic: /camera/color/camera_info
     object_pose_frame: camera_link
     fallback_camera_frame: camera_color_optical_frame
-    yolo_model: yolo11n.pt
+    yolo_model: /home/jnu/llm_yolo/yolo11s-seg.pt
     yolo_conf_threshold: 0.25
     yolo_target_classes: ['chair']
-    depth_mode: bbox_cluster
+    depth_mode: mask_cluster
     depth_center_patch_radius_px: 2
     depth_min_valid_m: 0.05
     depth_max_valid_m: 8.0

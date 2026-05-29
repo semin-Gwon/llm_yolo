@@ -3,3 +3,6 @@ mission_manager_node:
     fallback_places:
     - center
     mission_timeout_sec: 30
+    approach_distance_m: 1.0
+    min_approach_distance_m: 1.0
+    max_approach_distance_m: 1.0

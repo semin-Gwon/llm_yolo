@@ -14,6 +14,9 @@ class MissionManagerNode(Node):
         super().__init__('mission_manager_node')
         self.declare_parameter('fallback_places', ['hallway_corner', 'meeting_room_a'])
         self.declare_parameter('mission_timeout_sec', 30)
+        self.declare_parameter('approach_distance_m', 0.8)
+        self.declare_parameter('min_approach_distance_m', 0.6)
+        self.declare_parameter('max_approach_distance_m', 0.8)
         self.declare_parameter('navigate_action_name', '/llm_navigate_to_pose')
         self.declare_parameter('approach_action_name', '/approach_object')
         self.fallback_places = list(self.get_parameter('fallback_places').value)
@@ -39,6 +42,27 @@ class MissionManagerNode(Node):
         self.plan_last_step_success = None
         self.plan_last_step_success = None
         self.emergency_stop_active = False
+
+    def _clamp(self, value: float, min_value: float, max_value: float) -> float:
+        return max(min_value, min(max_value, value))
+
+    def _safe_timeout_sec(self, requested_timeout_sec: int | float | None) -> int:
+        max_timeout = int(self.get_parameter('mission_timeout_sec').value)
+        try:
+            requested = int(requested_timeout_sec or max_timeout)
+        except Exception:
+            requested = max_timeout
+        return max(1, min(max_timeout, requested))
+
+    def _safe_approach_distance_m(self, requested_distance_m: float | None) -> float:
+        default_distance = float(self.get_parameter('approach_distance_m').value)
+        min_distance = float(self.get_parameter('min_approach_distance_m').value)
+        max_distance = float(self.get_parameter('max_approach_distance_m').value)
+        try:
+            requested = float(requested_distance_m or default_distance)
+        except Exception:
+            requested = default_distance
+        return self._clamp(requested, min_distance, max_distance)
 
     def publish_heartbeat(self):
         self.heartbeat_pub.publish(Empty())
@@ -96,27 +120,27 @@ class MissionManagerNode(Node):
         if msg.intent == 'navigate_to_named_place':
             self.busy = True
             self.current_mode = 'navigate'
-            self.send_nav(msg.target_value, msg.max_duration_sec or 30, getattr(msg, 'speed_hint', 'normal'))
+            self.send_nav(msg.target_value, self._safe_timeout_sec(msg.max_duration_sec), getattr(msg, 'speed_hint', 'normal'))
         elif msg.intent == 'approach_object':
             self.busy = True
             self.current_mode = 'approach_object'
             self.send_approach(
                 msg.target_value,
                 getattr(msg, 'object_selector', ''),
-                msg.max_duration_sec or 30,
-                getattr(msg, 'approach_distance_m', 0.8),
+                self._safe_timeout_sec(msg.max_duration_sec),
+                self._safe_approach_distance_m(getattr(msg, 'approach_distance_m', 0.0)),
                 getattr(msg, 'speed_hint', 'normal'),
             )
         elif msg.intent == 'scan_scene':
             self.busy = True
             self.current_mode = 'scan'
-            self.send_scan(msg.target_value, msg.max_duration_sec or 10)
+            self.send_scan(msg.target_value, self._safe_timeout_sec(msg.max_duration_sec or 10))
         elif msg.intent == 'find_object':
             self.busy = True
             self.current_mode = 'find_object_scan'
             self.find_target = msg.target_value
             self.remaining_places = list(self.fallback_places[:2])
-            self.send_scan(self.find_target, msg.max_duration_sec or 10)
+            self.send_scan(self.find_target, self._safe_timeout_sec(msg.max_duration_sec or 10))
         else:
             self.publish_state(f'unsupported intent: {msg.intent}')
 
@@ -176,7 +200,7 @@ class MissionManagerNode(Node):
             return
         intent = str(step.get('intent', '')).strip()
         target_value = str(step.get('target_value', '')).strip()
-        timeout_sec = int(step.get('max_duration_sec', 30))
+        timeout_sec = self._safe_timeout_sec(step.get('max_duration_sec', 30))
         self.publish_state(
             f'mission_plan step {self.plan_index + 1}/{len(self.plan_steps)}: {intent}:{target_value}'
         )
@@ -190,7 +214,7 @@ class MissionManagerNode(Node):
                 target_value,
                 str(step.get('object_selector', '')),
                 timeout_sec,
-                float(step.get('approach_distance_m', 0.8)),
+                self._safe_approach_distance_m(step.get('approach_distance_m', 0.0)),
                 str(step.get('speed_hint', 'normal')),
             )
             return

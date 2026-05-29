@@ -12,8 +12,8 @@
 - 실기체 연결 전에 sim에서 YOLO와 실제 LLM 연결까지 먼저 검증한다
 
 문서 운영 규칙:
-- `plan.md`는 앞으로의 계획, 우선순위, 리스크, 완료 조건만 관리한다
-- 구현 및 검증이 완료된 항목은 `plan.md`에서 제거하고 [progress.md](/home/jnu/llm_yolo/progress.md)에 순서대로 기록한다
+- `sim_plan.md`는 앞으로의 계획, 우선순위, 리스크, 완료 조건만 관리한다
+- 구현 및 검증이 완료된 항목은 `sim_plan.md`에서 제거하고 [sim_progress.md](/home/jnu/llm_yolo/docs/planning/sim_progress.md)에 순서대로 기록한다
 - 진행 중인 phase에는 완료 이력 대신 남은 작업과 완료 조건만 유지한다
 
 ---
@@ -93,7 +93,7 @@ MVP에서 제외하는 기능은 본문에 넣지 않고 문서 최하단 주석
 - fallback 위치는 `center`
 - sim navigation은 Nav2를 우선 검증 경로로 사용
 - direct `/cmd_vel` 경로는 fallback/비교용으로 유지
-- 완료된 구현 및 검증 이력은 [progress.md](/home/jnu/llm_yolo/progress.md)에서 관리
+- 완료된 구현 및 검증 이력은 [sim_progress.md](/home/jnu/llm_yolo/docs/planning/sim_progress.md)에서 관리
 
 ---
 
@@ -271,7 +271,7 @@ MVP의 find_object는 아래 순서로만 동작한다.
 
 ```text
 llm_yolo/
-├── plan.md
+├── sim_plan.md
 ├── README.md
 ├── docs/
 │   ├── architecture.md

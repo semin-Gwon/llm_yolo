@@ -20,6 +20,12 @@ def generate_launch_description():
         ),
         Node(
             package='go2_skill_server_real',
+            executable='cmd_vel_to_sport_request_node',
+            name='cmd_vel_to_sport_request_node',
+            parameters=['/home/jnu/llm_yolo/configs/real/cmd_vel_bridge_params.yaml'],
+        ),
+        Node(
+            package='go2_skill_server_real',
             executable='navigate_to_pose_server',
             name='navigate_to_pose_server',
         ),
