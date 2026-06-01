@@ -377,19 +377,3 @@ rviz/real_perception.rviz
 | [docs/reference/sim_ros2_contract.md](docs/reference/sim_ros2_contract.md) | Isaac Sim ROS 2 contract |
 | [docs/planning/sim_progress.md](docs/planning/sim_progress.md) | sim 완료 기록 |
 | [docs/planning/real_progress.md](docs/planning/real_progress.md) | real 진행 기록 |
-
-## Repository Notes
-
-GitHub에는 다음 산출물을 포함하지 않습니다.
-
-```text
-.venv_yolo/
-build/
-install/
-log/
-bags/
-*.pt
-mobileclip_blt.ts
-```
-
-현재 모델 파일은 로컬에 직접 배치해서 사용합니다. `mobileclip_blt.ts`는 현재 코드 경로에서 사용하지 않는 open-vocabulary 실험용 모델 아티팩트로 분류했습니다.
