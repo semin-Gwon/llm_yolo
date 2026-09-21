@@ -12,6 +12,12 @@ user text
   -> sim backend 또는 real backend
 ```
 
+## Demo Video
+
+[![llm_yolo Demo Video](https://img.youtube.com/vi/q5wNRKhPRyM/maxresdefault.jpg)](https://youtu.be/q5wNRKhPRyM)
+
+> 📺 **시연 영상 바로가기**: [https://youtu.be/q5wNRKhPRyM](https://youtu.be/q5wNRKhPRyM)
+
 ## Common Architecture
 
 ```text
